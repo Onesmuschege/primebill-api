@@ -8,6 +8,9 @@ use Illuminate\Http\Request;
 
 class ClientService
 {
+    /**
+     * Get filtered and paginated list of system clients.
+     */
     public function getAllClients(Request $request)
     {
         $query = Client::query();
@@ -37,6 +40,9 @@ class ClientService
                      ->paginate($request->per_page ?? 15);
     }
 
+    /**
+     * Create client and record activity system logs.
+     */
     public function createClient(array $data, $userId)
     {
         $data['created_by'] = $userId;
@@ -53,6 +59,9 @@ class ClientService
         return $client;
     }
 
+    /**
+     * Update client attributes and record modification logs.
+     */
     public function updateClient(Client $client, array $data, $userId)
     {
         $oldValues = $client->toArray();
@@ -70,6 +79,9 @@ class ClientService
         return $client;
     }
 
+    /**
+     * Suspend client profile and cascade status to accounts.
+     */
     public function suspendClient(Client $client, $userId)
     {
         $client->update(['status' => 'suspended']);
@@ -88,6 +100,9 @@ class ClientService
         return $client;
     }
 
+    /**
+     * Activate client profile and cascade status to accounts.
+     */
     public function activateClient(Client $client, $userId)
     {
         $client->update(['status' => 'active']);
@@ -106,6 +121,9 @@ class ClientService
         return $client;
     }
 
+    /**
+     * Delete client record and capture snapshot details to logs.
+     */
     public function deleteClient(Client $client, $userId)
     {
         SystemLog::create([
