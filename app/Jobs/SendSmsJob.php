@@ -18,13 +18,11 @@ class SendSmsJob implements ShouldQueue
     public int $tries = 5;
 
     /**
-     * Seconds between retries (exponential-ish).
+     * Seconds between retries.
      *
      * @var array<int, int>
      */
     public array $backoff = [10, 30, 90, 300, 900];
-
-    public string $queue = 'sms';
 
     protected string $phone;
     protected string $message;
@@ -35,6 +33,8 @@ class SendSmsJob implements ShouldQueue
         $this->phone    = $phone;
         $this->message  = $message;
         $this->clientId = $clientId;
+
+        $this->onQueue('sms');
     }
 
     public function handle(SmsService $smsService): void
