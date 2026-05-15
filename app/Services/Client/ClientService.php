@@ -15,24 +15,24 @@ class ClientService
     {
         $query = Client::query();
 
-        // Filter by status
-        if ($request->has('status')) {
+        // Filter by status — filled() ignores empty string, has() does not
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         // Filter by town
-        if ($request->has('town')) {
+        if ($request->filled('town')) {
             $query->where('town', $request->town);
         }
 
-        // Search by name or phone
-        if ($request->has('search')) {
+        // Search by name, phone or email
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                  ->orWhere('last_name',  'like', "%{$search}%")
+                  ->orWhere('phone',      'like', "%{$search}%")
+                  ->orWhere('email',      'like', "%{$search}%");
             });
         }
 
@@ -86,7 +86,6 @@ class ClientService
     {
         $client->update(['status' => 'suspended']);
 
-        // Suspend all active accounts
         $client->accounts()->where('status', 'active')
                ->update(['status' => 'suspended']);
 
@@ -107,7 +106,6 @@ class ClientService
     {
         $client->update(['status' => 'active']);
 
-        // Activate suspended accounts
         $client->accounts()->where('status', 'suspended')
                ->update(['status' => 'active']);
 
