@@ -27,7 +27,8 @@ use App\Http\Controllers\Api\ReportController;
 
 // M-Pesa callbacks (NO auth)
 Route::prefix('mpesa')->group(function () {
-    Route::middleware('mpesa.callback')->group(function () {
+    // Use middleware class directly to avoid requiring Kernel changes
+    Route::middleware(\App\Http\Middleware\VerifyMpesaCallback::class)->group(function () {
         Route::post('/stk-callback', [MpesaController::class, 'stkCallback']);
         Route::post('/c2b-validation', [MpesaController::class, 'c2bValidation']);
         Route::post('/c2b-confirmation', [MpesaController::class, 'c2bConfirmation']);
