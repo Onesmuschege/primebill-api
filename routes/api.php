@@ -24,6 +24,7 @@ use App\Http\Controllers\Portal\PortalPaymentController;
 use App\Http\Controllers\Portal\PortalTicketController;
 use App\Http\Controllers\Portal\PortalProfileController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\PasswordResetController;
 
 // M-Pesa callbacks (NO auth)
 Route::prefix('mpesa')->group(function () {
@@ -38,6 +39,8 @@ Route::prefix('mpesa')->group(function () {
 // Public routes
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/password/forgot', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,1');
+    Route::post('/password/reset', [PasswordResetController::class, 'reset']);
 });
 
 // Client Portal routes
