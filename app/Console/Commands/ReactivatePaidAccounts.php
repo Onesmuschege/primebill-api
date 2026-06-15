@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\ActivateNetworkAccessJob;
 use App\Models\Client;
 use App\Models\Invoice;
 use Illuminate\Console\Command;
@@ -28,9 +29,10 @@ class ReactivatePaidAccounts extends Command
                 continue;
             }
 
-            $client->accounts()
-                ->where('status', 'suspended')
-                ->update(['status' => 'active']);
+            foreach ($client->accounts()->where('status', 'suspended')->get() as $account) {
+                $account->update(['status' => 'active']);
+                ActivateNetworkAccessJob::dispatch($account->id);
+            }
 
             $client->update(['status' => 'active']);
             $reactivated++;

@@ -8,5 +8,9 @@ interface RadiusAdapterInterface
 
     public function deleteUser(string $username): bool;
 
+    public function suspendUser(string $username): bool;
+
+    public function unsuspendUser(string $username): bool;
+
     public function syncUsers(): bool;
 }

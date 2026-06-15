@@ -23,8 +23,14 @@ use App\Http\Controllers\Portal\PortalInvoiceController;
 use App\Http\Controllers\Portal\PortalPaymentController;
 use App\Http\Controllers\Portal\PortalTicketController;
 use App\Http\Controllers\Portal\PortalProfileController;
+use App\Http\Controllers\Api\RadiusController;
+use App\Http\Controllers\Api\RadiusAccountingController;
+use App\Http\Controllers\Portal\PortalRegisterController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\PasswordResetController;
+
+// RADIUS accounting webhook (no auth — protect via firewall/IP in production)
+Route::post('/webhooks/radius/accounting', [RadiusAccountingController::class, 'accounting']);
 
 // M-Pesa callbacks (NO auth)
 Route::prefix('mpesa')->group(function () {
@@ -45,6 +51,7 @@ Route::prefix('auth')->group(function () {
 
 // Client Portal routes
 Route::prefix('portal')->group(function () {
+    Route::post('/register', [PortalRegisterController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/login', [PortalAuthController::class, 'login'])->middleware('throttle:10,1');
 
     Route::middleware(['auth:sanctum'])->group(function () {
@@ -59,6 +66,7 @@ Route::prefix('portal')->group(function () {
         Route::get('/tickets/{ticket}', [PortalTicketController::class, 'show']);
         Route::post('/tickets/{ticket}/reply', [PortalTicketController::class, 'reply']);
         Route::get('/profile', [PortalProfileController::class, 'index']);
+        Route::get('/balance', [PortalProfileController::class, 'balance']);
         Route::put('/profile', [PortalProfileController::class, 'update']);
         Route::post('/profile/change-password', [PortalProfileController::class, 'changePassword']);
     });
@@ -84,12 +92,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/{client}/accounts', [ClientController::class, 'accounts']);
         Route::get('/{client}/invoices', [ClientController::class, 'invoices']);
         Route::get('/{client}/payments', [ClientController::class, 'payments']);
+        Route::get('/{client}/balance', [ClientController::class, 'balance']);
         Route::get('/{client}/tickets', [ClientController::class, 'tickets']);
         Route::post('/{client}/suspend', [ClientController::class, 'suspend'])->middleware('permission:suspend clients');
         Route::post('/{client}/activate', [ClientController::class, 'activate'])->middleware('permission:activate clients');
         Route::post('/{client}/accounts', [ClientAccountController::class, 'store'])->middleware('permission:edit clients');
         Route::put('/{client}/accounts/{account}', [ClientAccountController::class, 'update'])->middleware('permission:edit clients');
         Route::delete('/{client}/accounts/{account}', [ClientAccountController::class, 'destroy'])->middleware('permission:edit clients');
+        Route::get('/{client}/accounts/{account}/status', [ClientAccountController::class, 'serviceStatus']);
     });
 
     // Plans
@@ -100,6 +110,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::put('/{plan}', [PlanController::class, 'update'])->middleware('permission:edit plans');
         Route::delete('/{plan}', [PlanController::class, 'destroy'])->middleware('permission:delete plans');
         Route::get('/{plan}/clients', [PlanController::class, 'clients']);
+        Route::post('/{plan}/assign', [PlanController::class, 'assign'])->middleware('permission:edit clients');
+    });
+
+    // RADIUS
+    Route::prefix('radius')->middleware('permission:view radius')->group(function () {
+        Route::get('/sessions', [RadiusController::class, 'sessions']);
+        Route::post('/sync', [RadiusController::class, 'sync'])->middleware('permission:sync radius');
     });
 
     // Routers
@@ -129,6 +146,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [PaymentController::class, 'index']);
         Route::post('/', [PaymentController::class, 'store'])->middleware('permission:create payments');
         Route::get('/summary', [PaymentController::class, 'summary']);
+        Route::get('/{payment}/receipt', [PaymentController::class, 'receipt']);
         Route::get('/{payment}', [PaymentController::class, 'show']);
         Route::delete('/{payment}', [PaymentController::class, 'destroy'])->middleware('permission:delete payments');
     });

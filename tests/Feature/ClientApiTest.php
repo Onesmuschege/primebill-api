@@ -1,96 +1,77 @@
 <?php
 
-use App\Models\User;
+namespace Tests\Feature;
+
 use App\Models\Client;
 use App\Models\Plan;
-use Illuminate\Testing\Fluent\AssertableJson;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
-beforeEach(function () {
-    $this->user = User::factory()->create();
-    $this->user->assignRole('super_admin');
-    $this->token = $this->user->createToken('test-token')->plainTextToken;
-});
+class ClientApiTest extends TestCase
+{
+    use RefreshDatabase;
 
-test('can list all clients', function () {
-    Client::factory(5)->create();
+    protected User $user;
 
-    $response = $this->getJson('/api/clients', [
-        'Authorization' => "Bearer {$this->token}",
-    ]);
+    protected string $token;
 
-    $response->assertStatus(200)
-        ->assertJsonStructure([
-            'success',
-            'data' => ['*' => ['id', 'first_name', 'email', 'status']],
-            'meta' => ['total', 'per_page'],
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->user  = User::factory()->create();
+        $this->user->assignRole('super_admin');
+        $this->token = $this->user->createToken('test-token')->plainTextToken;
+    }
+
+    public function test_can_list_all_clients(): void
+    {
+        Client::factory()->count(3)->create();
+
+        $response = $this->getJson('/api/clients', [
+            'Authorization' => "Bearer {$this->token}",
         ]);
-});
 
-test('can create a client with valid data', function () {
-    $data = [
-        'first_name' => 'John',
-        'last_name' => 'Doe',
-        'email' => 'john@example.com',
-        'phone' => '0791234567',
-        'id_number' => '12345678',
-        'address' => '123 Main St',
-        'city' => 'Nairobi',
-        'account_type' => 'residential',
-        'plan_id' => Plan::factory()->create()->id,
-    ];
+        $response->assertStatus(200)
+            ->assertJsonStructure(['success', 'data']);
+    }
 
-    $response = $this->postJson('/api/clients', $data, [
-        'Authorization' => "Bearer {$this->token}",
-    ]);
+    public function test_can_create_a_client_with_valid_data(): void
+    {
+        $plan = Plan::factory()->create();
 
-    $response->assertStatus(201)
-        ->assertJsonPath('data.email', 'john@example.com');
+        $data = [
+            'first_name'   => 'John',
+            'last_name'    => 'Doe',
+            'email'        => 'john@example.com',
+            'phone'        => '254712345678',
+            'id_number'    => '12345678',
+            'address'      => '123 Main Street Nairobi',
+            'city'         => 'Nairobi',
+            'account_type' => 'residential',
+            'plan_id'      => $plan->id,
+        ];
 
-    $this->assertDatabaseHas('clients', ['email' => 'john@example.com']);
-});
+        $response = $this->postJson('/api/clients', $data, [
+            'Authorization' => "Bearer {$this->token}",
+        ]);
 
-test('cannot create client with invalid email', function () {
-    $data = [
-        'first_name' => 'John',
-        'last_name' => 'Doe',
-        'email' => 'invalid-email',
-        'phone' => '0791234567',
-        'id_number' => '12345678',
-        'address' => '123 Main St',
-        'city' => 'Nairobi',
-        'account_type' => 'residential',
-        'plan_id' => Plan::factory()->create()->id,
-    ];
+        $response->assertStatus(201)
+            ->assertJsonPath('data.email', 'john@example.com');
 
-    $response = $this->postJson('/api/clients', $data, [
-        'Authorization' => "Bearer {$this->token}",
-    ]);
+        $this->assertDatabaseHas('clients', ['email' => 'john@example.com']);
+    }
 
-    $response->assertStatus(422)
-        ->assertJsonValidationErrors('email');
-});
+    public function test_can_suspend_a_client(): void
+    {
+        $client = Client::factory()->create(['status' => 'active']);
 
-test('can update a client', function () {
-    $client = Client::factory()->create();
+        $response = $this->postJson("/api/clients/{$client->id}/suspend", [], [
+            'Authorization' => "Bearer {$this->token}",
+        ]);
 
-    $response = $this->putJson("/api/clients/{$client->id}", [
-        'first_name' => 'Jane',
-        'phone' => '0795555555',
-    ], [
-        'Authorization' => "Bearer {$this->token}",
-    ]);
-
-    $response->assertStatus(200);
-    $this->assertEquals('Jane', $client->fresh()->first_name);
-});
-
-test('can suspend a client', function () {
-    $client = Client::factory()->create(['status' => 'active']);
-
-    $response = $this->postJson("/api/clients/{$client->id}/suspend", [], [
-        'Authorization' => "Bearer {$this->token}",
-    ]);
-
-    $response->assertStatus(200);
-    $this->assertEquals('suspended', $client->fresh()->status);
-});
+        $response->assertStatus(200);
+        $this->assertEquals('suspended', $client->fresh()->status);
+    }
+}

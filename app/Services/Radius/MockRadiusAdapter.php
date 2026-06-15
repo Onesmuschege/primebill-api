@@ -20,6 +20,20 @@ class MockRadiusAdapter implements RadiusAdapterInterface
         return true;
     }
 
+    public function suspendUser(string $username): bool
+    {
+        Log::info('MockRadiusAdapter:suspendUser', ['username' => $username]);
+
+        return true;
+    }
+
+    public function unsuspendUser(string $username): bool
+    {
+        Log::info('MockRadiusAdapter:unsuspendUser', ['username' => $username]);
+
+        return true;
+    }
+
     public function syncUsers(): bool
     {
         Log::info('MockRadiusAdapter:syncUsers');

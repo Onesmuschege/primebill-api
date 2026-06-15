@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\StoreClientRequest;
 use App\Http\Requests\Client\UpdateClientRequest;
 use App\Models\Client;
+use App\Services\Billing\BalanceService;
 use App\Services\Client\ClientService;
 use Illuminate\Http\Request;
 
@@ -115,6 +116,15 @@ class ClientController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $client->tickets()->orderBy('created_at', 'desc')->get(),
+        ]);
+    }
+
+    // GET /api/clients/{id}/balance
+    public function balance(Client $client, BalanceService $balanceService)
+    {
+        return response()->json([
+            'success' => true,
+            'data'    => $balanceService->getClientBalance($client->id),
         ]);
     }
 

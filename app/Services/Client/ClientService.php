@@ -2,6 +2,8 @@
 
 namespace App\Services\Client;
 
+use App\Jobs\ActivateNetworkAccessJob;
+use App\Jobs\SuspendNetworkAccessJob;
 use App\Models\Client;
 use App\Models\SystemLog;
 use Illuminate\Http\Request;
@@ -86,8 +88,12 @@ class ClientService
     {
         $client->update(['status' => 'suspended']);
 
-        $client->accounts()->where('status', 'active')
-               ->update(['status' => 'suspended']);
+        $accounts = $client->accounts()->where('status', 'active')->get();
+
+        foreach ($accounts as $account) {
+            $account->update(['status' => 'suspended']);
+            SuspendNetworkAccessJob::dispatch($account->id);
+        }
 
         SystemLog::create([
             'user_id'  => $userId,
@@ -106,8 +112,12 @@ class ClientService
     {
         $client->update(['status' => 'active']);
 
-        $client->accounts()->where('status', 'suspended')
-               ->update(['status' => 'active']);
+        $accounts = $client->accounts()->where('status', 'suspended')->get();
+
+        foreach ($accounts as $account) {
+            $account->update(['status' => 'active']);
+            ActivateNetworkAccessJob::dispatch($account->id);
+        }
 
         SystemLog::create([
             'user_id'  => $userId,

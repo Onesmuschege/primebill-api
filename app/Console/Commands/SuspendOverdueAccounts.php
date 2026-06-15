@@ -2,8 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\ActivateNetworkAccessJob;
+use App\Jobs\SuspendNetworkAccessJob;
 use App\Models\Invoice;
-use App\Models\ClientAccount;
 use App\Services\Sms\SmsService;
 use Illuminate\Console\Command;
 
@@ -21,9 +22,12 @@ class SuspendOverdueAccounts extends Command
 
         $count = 0;
         foreach ($overdueInvoices as $invoice) {
-            $invoice->client->accounts()
-                            ->where('status', 'active')
-                            ->update(['status' => 'suspended']);
+            $accounts = $invoice->client->accounts()->where('status', 'active')->get();
+
+            foreach ($accounts as $account) {
+                $account->update(['status' => 'suspended']);
+                SuspendNetworkAccessJob::dispatch($account->id);
+            }
 
             $invoice->client->update(['status' => 'suspended']);
 

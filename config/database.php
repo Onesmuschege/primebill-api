@@ -84,6 +84,24 @@ return [
             ]) : [],
         ],
 
+        'radius' => [
+            'driver' => env('RADIUS_DB_DRIVER', env('DB_CONNECTION', 'sqlite')),
+            'url' => env('RADIUS_DB_URL'),
+            'host' => env('RADIUS_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('RADIUS_DB_PORT', env('DB_PORT', '3306')),
+            'database' => env('RADIUS_DB_DATABASE', env('DB_DATABASE', database_path('database.sqlite'))),
+            'username' => env('RADIUS_DB_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('RADIUS_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'unix_socket' => env('RADIUS_DB_SOCKET', env('DB_SOCKET', '')),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),

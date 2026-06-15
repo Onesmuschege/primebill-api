@@ -5,9 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Plan\StorePlanRequest;
 use App\Http\Requests\Plan\UpdatePlanRequest;
+use App\Jobs\ProvisionClientAccountJob;
+use App\Models\Client;
+use App\Models\ClientAccount;
 use App\Models\Plan;
 use App\Services\Plan\PlanService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class PlanController extends Controller
 {
@@ -94,5 +98,37 @@ class PlanController extends Controller
             'success' => true,
             'data'    => $clients,
         ]);
+    }
+
+    // POST /api/plans/{id}/assign
+    public function assign(Request $request, Plan $plan)
+    {
+        $request->validate([
+            'client_id' => 'required|exists:clients,id',
+            'username'  => 'required|string|unique:client_accounts,username',
+            'password'  => 'required|string|min:6',
+        ]);
+
+        $client = Client::findOrFail($request->client_id);
+        $plainPassword = $request->password;
+
+        $account = ClientAccount::create([
+            'client_id'    => $client->id,
+            'plan_id'      => $plan->id,
+            'username'     => $request->username,
+            'password'     => Hash::make($plainPassword),
+            'type'         => 'prepaid',
+            'status'       => 'active',
+            'expiry_date'  => now()->addDays($plan->validity_days ?? 30),
+            'activated_at' => now(),
+        ]);
+
+        ProvisionClientAccountJob::dispatch($account->id, $plainPassword);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Plan assigned and provisioning queued',
+            'data'    => $account->load('plan', 'client'),
+        ], 201);
     }
 }

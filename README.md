@@ -284,10 +284,12 @@ php artisan queue:work
 
 ## Default Credentials
 
-| Role | Email | Password |
+> **Change these immediately after first login.** Set `SEED_ADMIN_PASSWORD` and `SEED_STAFF_PASSWORD` in `.env` before running `php artisan db:seed`.
+
+| Role | Email | Default (if env not set) |
 |---|---|---|
-| Super Admin | admin@primebill.co.ke | Admin@1234 |
-| Staff | staff@primebill.co.ke | Staff@1234 |
+| Super Admin | admin@primebill.co.ke | Set via `SEED_ADMIN_PASSWORD` |
+| Staff | staff@primebill.co.ke | Set via `SEED_STAFF_PASSWORD` |
 
 ---
 
@@ -297,6 +299,8 @@ php artisan queue:work
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/auth/login` | Login and get token |
+| POST | `/api/auth/password/forgot` | Request password reset link |
+| POST | `/api/auth/password/reset` | Reset password with token |
 | GET | `/api/auth/me` | Get authenticated user |
 | POST | `/api/auth/logout` | Logout |
 | POST | `/api/auth/change-password` | Change password |

@@ -1,226 +1,172 @@
-# MVP_GAP_ANALYSIS.md
+# MVP Gap Analysis — Updated Status
 
-This document compares the current repository state (Onesmuschege/primebill-api) against the ISP Billing MVP checklist provided.
+**Last reviewed:** 2026-06-15  
+**Repository:** primebill-api (Laravel 12)
 
-Status key
-- Present — feature appears implemented and routes/services/controllers exist.
-- Partial — feature scaffolded or partly implemented; needs verification, tests, or missing sub-features.
-- Missing — not implemented or no clear scaffold found.
+This document tracks MVP checklist items against the current codebase.
 
-SUMMARY
-- Overall: The codebase is feature-rich and already covers most core ISP Billing functionality. Several items are present but need verification, tests, hardening, or missing small sub-features to be fully MVP-ready.
+Status key: **Present** | **Partial** | **Missing**
 
-1) CUSTOMER MANAGEMENT
-- Customer registration: Missing
-  - Reason: I found clients endpoints for staff/admin create (POST /api/clients) but no public self-registration endpoint or registration workflow for customers in the portal routes.
-  - Remediation: Add portal self-registration endpoint with email/phone verification (or expose a controlled registration flow). Add tests and rate limiting.
-  - Est: 1 day.
+---
 
-- Customer profiles: Present
-  - Reason: Client and portal profile controllers exist; model Client present per README and routes.
-  - Remediation: Verify profile fields, privacy, and update flows; add tests.
-  - Est: 0.5 day for verification + tests.
+## SUMMARY
 
-- Service status: Partial
-  - Reason: Client suspend/activate endpoints exist; network session monitoring exists but API surface for per-service status (active/suspended/terminated) needs verification.
-  - Remediation: Add explicit service status endpoints (if missing) and ensure UI/portal visibility. Tie router/RADIUS state to service status through service adapters.
-  - Est: 1 day.
+The codebase now covers the core ISP billing MVP. Network provisioning (RouterOS + RADIUS) is wired through adapter interfaces with mock drivers for dev/test and real drivers for production. Remaining gaps are mostly operational hardening (PDF receipts, email templates, broader test coverage, PHPStan).
 
-- Customer search: Partial
-  - Reason: clients index exists, but search/filter capabilities must be verified (query params, pagination).
-  - Remediation: Ensure index supports search by name/email/account, add tests and indexes for performance.
-  - Est: 0.5–1 day.
+---
 
-- Customer suspension/activation: Present
-  - Reason: routes /api/clients/{client}/suspend and /activate exist and protected by permissions.
-  - Remediation: Ensure these actions trigger provisioning jobs (router/RADIUS) and audit logs; add tests and failure handling.
-  - Est: 0.5 day.
+## 1) CUSTOMER MANAGEMENT
 
-2) SERVICE PLANS
-- Internet packages: Present
-  - Reason: Plan model & PlanSeeder present; plans endpoints exist.
+| Item | Status | Notes |
+|---|---|---|
+| Customer registration | **Present** | `POST /api/portal/register` with rate limiting |
+| Customer profiles | **Present** | Portal + admin client endpoints |
+| Service status | **Present** | `GET /api/clients/{client}/accounts/{account}/status` |
+| Customer search | **Present** | `search` query param on clients index |
+| Suspension/activation | **Present** | DB + network jobs on suspend/activate |
 
-- Bandwidth profiles: Present
-  - Reason: Plans have speed_up and speed_down fields; FUP/burst referenced in README.
+---
 
-- Pricing plans: Present
-  - Reason: price field in PlanSeeder and endpoints.
+## 2) SERVICE PLANS
 
-- Plan assignment: Partial
-  - Reason: The PlanController exposes clients listing per plan; but the action to assign a plan to a client (and the provisioning flow) needs confirmation.
-  - Remediation: Add/verify assign-plan endpoint & provisioning job that updates RouterOS and RADIUS profiles; add tests.
-  - Est: 1 day.
+| Item | Status | Notes |
+|---|---|---|
+| Internet packages | **Present** | Plans CRUD with speed/FUP fields |
+| Bandwidth profiles | **Present** | speed_up/down, burst, FUP on plans |
+| Pricing plans | **Present** | price field + endpoints |
+| Plan assignment | **Present** | `POST /api/plans/{plan}/assign` + provisioning job |
 
-3) BILLING
-- Billing cycles: Present (scheduled jobs)
-  - Reason: README lists scheduled bills and console commands; invoice bulk generation endpoint exists.
+---
 
-- Invoice generation: Present
-  - Reason: InvoiceController and bulk-generate endpoint exist; Project has GenerateMonthlyInvoices command referenced.
+## 3) BILLING
 
-- Invoice status: Partial
-  - Reason: Invoicing engine exists, but fields for status (paid/unpaid/overdue/cancelled) must be validated across models and API responses.
-  - Remediation: Ensure consistent status enums, add API filters and tests.
-  - Est: 0.5 day.
+| Item | Status | Notes |
+|---|---|---|
+| Billing cycles | **Present** | Scheduled commands in `routes/console.php` |
+| Invoice generation | **Present** | Manual + bulk + monthly command |
+| Invoice status | **Present** | unpaid/paid/overdue/partial/cancelled + filters |
+| Tax support | **Present** | Auto-apply `tax_rate` from settings via `InvoiceService::calculateTax()` |
+| Recurring billing | **Present** | `billing:generate-invoices` scheduled monthly |
 
-- Tax support: Missing
-  - Reason: No explicit tax configuration or invoice tax lines detected in the sampled files or README.
-  - Remediation: Add tax fields to invoice line items and settings for tax rates (multiple jurisdictions optional), update PDF template and calculations, add tests.
-  - Est: 1–2 days.
+---
 
-- Recurring billing: Present (via scheduled commands)
-  - Reason: Scheduled job for monthly generation is documented.
+## 4) PAYMENTS
 
-4) PAYMENTS
-- Payment recording: Present
-  - Reason: PaymentController and Payment model present; MPesa integration present.
+| Item | Status | Notes |
+|---|---|---|
+| Payment recording | **Present** | PaymentController + M-Pesa STK/C2B |
+| Payment reconciliation | **Present** | `payments:reconcile-mpesa` + idempotency |
+| Outstanding balances | **Present** | `GET /api/clients/{id}/balance`, portal balance |
+| Receipt generation | **Partial** | JSON receipt at `GET /api/payments/{id}/receipt` (PDF not yet added) |
 
-- Payment reconciliation: Partial
-  - Reason: MpesaController and ProcessMpesaPayment job exist; need to validate robust reconciliation (matching STK/c2b to invoices, handling duplicates and reconciliation status).
-  - Remediation: Add/review reconciliation logic, idempotency handling, and tests (including simulated MPesa callback payloads).
-  - Est: 1–2 days.
+---
 
-- Outstanding balances: Partial
-  - Reason: Payment summary endpoints exist; ensure per-client balance calculation is present and accounts for credits/adjustments.
-  - Remediation: Add APIs and tests for outstanding balances and statement generation.
-  - Est: 1 day.
+## 5) NETWORK PROVISIONING
 
-- Receipt generation: Partial
-  - Reason: README references PDF export via DomPDF; ensure receipts (per payment) are generated and downloadable.
-  - Remediation: Add receipt generation endpoints and tests.
-  - Est: 0.5–1 day.
+| Item | Status | Notes |
+|---|---|---|
+| Service activation/suspension | **Present** | Jobs: Provision, Suspend, Activate, Deprovision |
+| RouterOS abstraction | **Present** | `RouterAdapterInterface`, `MikroTikRouterAdapter`, `MockRouterAdapter` |
+| RADIUS abstraction | **Present** | `RadiusAdapterInterface`, `FreeRadiusAdapter`, `MockRadiusAdapter` |
+| Traffic polling | **Present** | `network:poll-traffic` command (scheduled every 5 min) |
+| RADIUS sync | **Present** | `radius:sync-users` command + `POST /api/radius/sync` |
+| RADIUS accounting | **Present** | `POST /api/webhooks/radius/accounting` + `ProcessRadiusAccountingJob` |
 
-5) NETWORK PROVISIONING
-- Service activation/suspension/termination: Partial
-  - Reason: client suspend/activate endpoints exist; RouterController and MikroTikService exist. Need to verify automated provisioning calls occur on suspend/activate and on new account creation.
-  - Remediation: Implement explicit provisioning worker jobs (create user on RouterOS, create RADIUS user) and write tests using mock adapters.
-  - Est: 2–4 days (depending on router/RADIUS complexity).
+**Production config:** Set `NETWORK_ROUTER_DRIVER=mikrotik` and `NETWORK_RADIUS_DRIVER=freeradius` in `.env`.
 
-- Router integration abstraction: Partial
-  - Reason: evilfreelancer/routeros-api-php is required and MikroTikService referenced. Need adapter interface and mock implementation for testing and local dev.
-  - Remediation: Define RouterAdapterInterface, implement RealRouterAdapter and MockRouterAdapter; add unit tests.
-  - Est: 1–2 days.
+---
 
-- Radius integration abstraction: Partial
-  - Reason: FreeRADIUS sync is referenced but adapter implementation confirmation needed.
-  - Remediation: Add RadiusAdapterInterface and a mock implementation; create a SyncRadiusUsers command with tests.
-  - Est: 1–2 days.
+## 6) AUTHENTICATION & AUTHORIZATION
 
-6) AUTHENTICATION & AUTHORIZATION
-- Login: Present (AuthController)
-- Password reset: Missing
-  - Reason: changePassword exists, but no password reset (email token) flow found.
-  - Remediation: Add password reset endpoints using Laravel's password broker (email reset), add tests and email templates.
-  - Est: 0.5–1 day.
+| Item | Status | Notes |
+|---|---|---|
+| Login | **Present** | Admin + portal |
+| Password reset | **Present** | `/api/auth/password/forgot` and `/reset` |
+| Roles & permissions | **Present** | Spatie permission middleware |
 
-- Roles & Permissions: Present (Spatie)
-  - Reason: RolesAndPermissionsSeeder and middleware usage in routes.
+---
 
-7) NOTIFICATIONS
-- Email notifications: Partial
-  - Reason: Not explicitly referenced in sampled files; queued jobs present (likely used for PDF/SMS). Email templates/actions need verification.
-  - Remediation: Add or confirm Mailable classes for invoices, receipts, and reminders; add tests with mail fakes.
-  - Est: 0.5–1 day.
+## 7) NOTIFICATIONS
 
-- SMS notifications: Present
-  - Reason: SmsController and gateway adapters exist; SendSmsJob and SendBulkSmsJob present.
-  - Remediation: Add test fakes for gateways and ensure retries/logging.
-  - Est: 0.5 day.
+| Item | Status | Notes |
+|---|---|---|
+| Email notifications | **Partial** | Mail config present; invoice/receipt mailables not yet added |
+| SMS notifications | **Present** | SmsService + gateways + jobs |
+| Payment/invoice reminders | **Present** | `billing:send-reminders` scheduled |
 
-- Payment reminders & Invoice notifications: Partial
-  - Reason: Scheduled jobs are referenced in README for reminders; verify implementation and testing.
-  - Remediation: Ensure scheduled SendInvoiceReminders uses SMS/email notifications appropriately and expose configuration for schedules.
-  - Est: 0.5–1 day.
+---
 
-8) SUPPORT
-- Ticket creation: Present
-  - Reason: TicketController routes exist for create, reply, assign, close.
+## 8) SUPPORT
 
-- Ticket tracking & resolution workflow: Partial
-  - Reason: Basic operations present; SLA/escalation policies and automation need verification/implementation.
-  - Remediation: Implement escalation rules and notifications; add tests.
-  - Est: 1–2 days.
+| Item | Status | Notes |
+|---|---|---|
+| Ticket creation | **Present** | Full ticket CRUD + portal |
+| SLA/escalation | **Partial** | Escalate endpoint exists; SLA policies not configured |
 
-9) REPORTING
-- Revenue reports: Present
-  - Reason: ReportController includes income and clients/invoices endpoints.
+---
 
-- Customer reports: Present
-- Outstanding invoice reports: Present (reports/invoices)
-- Subscription reports: Partial
-  - Reason: analytics endpoints exist but may need extended filters and tests.
-  - Remediation: Add parameterized report filters and export options.
-  - Est: 1 day.
+## 9) REPORTING
 
-10) SYSTEM SETTINGS
-- Company profile: Partial
-  - Reason: SettingsController exists; verify UI and settings persistence.
-  - Remediation: Add settings validation and seed default settings; tests.
-  - Est: 0.5 day.
+| Item | Status | Notes |
+|---|---|---|
+| Revenue/customer/invoice reports | **Present** | ReportController |
+| Subscription reports | **Partial** | Analytics endpoints; extended filters optional |
 
-- Tax configuration: Missing (see Billing tax support)
-- Billing configuration: Partial
-  - Reason: scheduler settings referenced but centralized billing configuration may be missing (grace periods, overdue thresholds configurable in settings?).
-  - Remediation: Add settings keys for billing rules and UI.
-  - Est: 0.5 day.
+---
 
-- Notification configuration: Partial
-  - Reason: config/sms.php exists and config/mpesa.php; ensure all gateways and email settings are centralized in settings and .env example.
-  - Est: 0.5 day.
+## 10) SYSTEM SETTINGS
 
-11) AUDIT & LOGGING
-- User activity logs: Present
-  - Reason: SystemLog model and LogController exist; AuthController writes login/logout logs.
+| Item | Status | Notes |
+|---|---|---|
+| Company profile | **Present** | SettingsController + seeder |
+| Tax configuration | **Present** | `tax_rate` in settings, auto-applied on invoices |
+| Billing configuration | **Present** | grace_period, auto_suspend, auto_invoice in settings |
+| Notification configuration | **Partial** | SMS/M-Pesa in settings; email gateway settings minimal |
 
-- Billing logs: Partial
-  - Reason: FUP, invoices, payments likely recorded but ensure BillingService writes audit entries for invoice generation and adjustments.
-  - Remediation: Add billing audit events if missing and tests for idempotency.
-  - Est: 0.5–1 day.
+---
 
-- Payment logs: Partial
-  - Reason: MPesa logs and Sms logs exist; ensure reconciliation events are logged.
-  - Est: 0.5 day.
+## 11) AUDIT & LOGGING
 
-NON-FUNCTIONAL, INFRA & OPS
-- Tests: Partial / Unknown
-  - Reason: phpunit present in composer dev dependencies; tests directory needs enumeration and baseline run.
-  - Remediation: Run PHPUnit, add missing unit & feature tests for critical flows, and add coverage reporting in CI.
-  - Est: Initial baseline 1–2 days.
+| Item | Status | Notes |
+|---|---|---|
+| User activity logs | **Present** | SystemLog + LogController |
+| Billing logs | **Present** | InvoiceService writes audit entries |
+| Network provisioning logs | **Present** | `mikrotik_sync_logs` via ProvisioningService |
+| Payment logs | **Present** | M-Pesa callbacks + payment failures tables |
 
-- CI: Missing/Unknown
-  - Reason: No .github/workflows found in initial sample; ensure CI is present and runs phpunit and static analysis on pushes.
-  - Remediation: Add GitHub Actions workflow for phpunit, static analysis, and PHP CS Fixer if missing.
-  - Est: 0.5–1 day.
+---
 
-- Static analysis / typing: Missing/Partial
-  - Reason: PHPStan / Larastan not present in composer.json; add for quality gates.
-  - Remediation: Add larastan as dev dependency and fix issues progressively.
-  - Est: 1–3 days depending on baselining.
+## NON-FUNCTIONAL
 
-- Security hardening: Partial
-  - Reason: config/mpesa.php includes callback hardening options (allowed IPs & signature secret) but enforcement middleware was not yet identified in code samples.
-  - Remediation: Implement MPesa callback verification middleware, ensure CORS and rate limiting, remove default credentials from README, and verify proper storage of secrets.
-  - Est: 1 day.
+| Item | Status | Notes |
+|---|---|---|
+| Tests | **Partial** | Mpesa, provisioning, portal register, password reset, tax, client API |
+| CI | **Present** | `.github/workflows/ci.yml` runs migrations + tests |
+| Static analysis | **Missing** | PHPStan/Larastan not yet added |
+| Security hardening | **Partial** | M-Pesa callback middleware present; rotate default seeds |
 
-PRIORITIZATION (recommended)
-1. MPesa callback verification & robust payment reconciliation (Critical) — 1–2 days.
-2. Remove default credentials and secure README + .env.example (Critical) — 0.5 day.
-3. Tests for authentication, invoice generation, payment reconciliation, provisioning (High) — 2–4 days.
-4. RouterOS & RADIUS mock adapters and provisioning tests (High) — 2–4 days.
-5. Add CI (phpunit & static analysis) (High) — 0.5–1 day.
-6. Implement password reset, tax fields, and receipts (Medium) — 2–4 days.
+---
 
-OUTSTANDING UNKNOWN AREAS
-- The exact list of migrations and their contents (I will enumerate and validate in the next step).
-- Presence and contents of tests/ directory and the baseline test pass rate.
-- Whether MPesa callback verification is already implemented as middleware or inside MpesaController.
+## REMAINING POST-MVP ITEMS
 
-NEXT STEPS (immediate)
-1. Enumerate migrations and run static analysis & unit tests to capture failing tests and TODOs.
-2. Implement MPesa callback verification middleware and add idempotent reconciliation logic & tests.
-3. Redact default credentials in README and update .env.example.
-4. Add RouterOS & RADIUS mock adapters and write provisioning tests.
-5. Commit MVP_GAP_ANALYSIS.md and start implementing the prioritized items.
+1. PDF receipts/invoices (DomPDF or similar)
+2. Email mailables for invoices, receipts, reminders
+3. PHPStan/Larastan baseline
+4. Hotspot voucher/prepaid module (architecture doc outlines this)
+5. FUP enforcement engine (schema exists; enforcement logic pending)
+6. Broader C2B callback test coverage
 
-Prepared by: GitHub Copilot (as senior software architect)
-Date: 2026-06-11
+---
+
+## NEW FILES (2026-06-15 MVP completion)
+
+- `config/network.php` — adapter driver configuration
+- `app/Services/Network/MikroTikRouterAdapter.php`
+- `app/Services/Network/ProvisioningService.php`
+- `app/Services/Radius/FreeRadiusAdapter.php`
+- `app/Jobs/ProvisionClientAccountJob.php` (+ Suspend, Activate, Deprovision, ProcessRadiusAccounting)
+- `app/Http/Controllers/Portal/PortalRegisterController.php`
+- `app/Http/Controllers/Api/RadiusController.php`
+- `app/Http/Controllers/Api/RadiusAccountingController.php`
+- `app/Services/Billing/BalanceService.php`
+- `database/migrations/2026_06_15_100000_create_freeradius_tables.php`

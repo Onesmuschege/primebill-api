@@ -5,12 +5,14 @@ namespace App\Services\Billing;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\SystemLog;
+use App\Services\Settings\SettingsService;
 use Illuminate\Http\Request;
 
 class InvoiceService
 {
     public function __construct(
-        protected LedgerService $ledgerService
+        protected LedgerService $ledgerService,
+        protected SettingsService $settingsService
     ) {}
 
     public function getAllInvoices(Request $request)
@@ -52,7 +54,7 @@ class InvoiceService
     public function createInvoice(array $data, $userId): Invoice
     {
         $data['invoice_number'] = $this->generateInvoiceNumber();
-        $data['tax']            = $data['tax'] ?? 0;
+        $data['tax']            = $data['tax'] ?? $this->calculateTax($data['amount']);
         $data['total']          = $data['amount'] + $data['tax'];
         $data['created_by']     = $userId;
         $data['status']         = $data['status'] ?? 'unpaid';
@@ -188,5 +190,16 @@ class InvoiceService
         }
 
         return $count;
+    }
+
+    public function calculateTax(float $amount): float
+    {
+        $rate = (float) $this->settingsService->get('tax_rate', 0);
+
+        if ($rate <= 0) {
+            return 0;
+        }
+
+        return round($amount * ($rate / 100), 2);
     }
 }

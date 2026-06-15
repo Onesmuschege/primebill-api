@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Services\Billing\BalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -34,6 +35,15 @@ class PortalProfileController extends Controller
             'success' => true,
             'message' => 'Profile updated successfully',
             'data'    => $request->user(),
+        ]);
+    }
+
+    // GET /api/portal/balance
+    public function balance(Request $request, BalanceService $balanceService)
+    {
+        return response()->json([
+            'success' => true,
+            'data'    => $balanceService->getClientBalance($request->user()->id),
         ]);
     }
 

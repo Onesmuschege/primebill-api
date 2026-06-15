@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Payment\StorePaymentRequest;
 use App\Models\Payment;
 use App\Services\Billing\PaymentService;
+use App\Services\Settings\SettingsService;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
@@ -80,6 +81,27 @@ class PaymentController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $summary,
+        ]);
+    }
+
+    // GET /api/payments/{id}/receipt
+    public function receipt(Payment $payment, SettingsService $settings)
+    {
+        $payment->load('client', 'invoice');
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'receipt_number' => 'RCP-' . str_pad($payment->id, 8, '0', STR_PAD_LEFT),
+                'payment'          => $payment,
+                'company'          => [
+                    'name'    => $settings->get('company_name'),
+                    'phone'   => $settings->get('company_phone'),
+                    'email'   => $settings->get('company_email'),
+                    'address' => $settings->get('company_address'),
+                ],
+                'issued_at' => $payment->created_at?->toIso8601String(),
+            ],
         ]);
     }
 }

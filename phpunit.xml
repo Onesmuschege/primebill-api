@@ -28,6 +28,8 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="NETWORK_ROUTER_DRIVER" value="mock"/>
+        <env name="NETWORK_RADIUS_DRIVER" value="mock"/>
         <env name="VIEW_COMPILED_PATH" value="C:/laragon/primebill/primebill-api/storage/framework/views-testing"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

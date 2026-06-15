@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Jobs\ActivateNetworkAccessJob;
 use App\Models\ClientAccount;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -185,6 +186,8 @@ class PaymentService
             'status'      => 'active',
             'expiry_date' => $newExpiry,
         ]);
+
+        ActivateNetworkAccessJob::dispatch($account->id);
     }
 
     public function getDailySummary(): array
