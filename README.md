@@ -128,7 +128,11 @@ cd primebill-api
 2. Install PHP dependencies
 
 ```bash
+composer update
 composer install
+
+enable ;extension=sockets
+enable ;extension=zip
 ```
 
 3. Copy and configure environment file
