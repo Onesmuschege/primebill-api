@@ -2,6 +2,7 @@
 
 namespace App\Services\Mpesa;
 
+use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\MpesaTransaction;
 use App\Services\Billing\PaymentService;
@@ -22,7 +23,10 @@ class MpesaService
         $this->paymentService = $paymentService;
     }
 
-    // Get OAuth token
+    // -------------------------------------------------------------------------
+    // OAuth
+    // -------------------------------------------------------------------------
+
     public function getAccessToken(): string
     {
         $consumerKey    = config('mpesa.consumer_key');
@@ -33,10 +37,17 @@ class MpesaService
             'Authorization' => "Basic {$credentials}",
         ])->get("{$this->baseUrl}/oauth/v1/generate?grant_type=client_credentials");
 
+        if (!$response->successful()) {
+            throw new Exception('Failed to fetch M-Pesa access token: ' . $response->body());
+        }
+
         return $response->json('access_token');
     }
 
+    // -------------------------------------------------------------------------
     // STK Push
+    // -------------------------------------------------------------------------
+
     public function stkPush(string $phone, float $amount, int $invoiceId, string $accountRef): array
     {
         try {
@@ -67,42 +78,60 @@ class MpesaService
             ];
 
             $response = Http::withToken($token)
-                ->post("{$this->baseUrl}/mpesa/stkpush/v1/processrequest", [
-                    ...$requestPayload,
-                ]);
+                ->post("{$this->baseUrl}/mpesa/stkpush/v1/processrequest", $requestPayload);
 
             $json = $response->json() ?? [];
 
-            // Track STK request for secure callback reconciliation.
+            // Track STK request so the callback can reconcile against it.
             MpesaTransaction::create([
-                'client_id' => $invoice->client_id,
-                'invoice_id' => $invoice->id,
-                'phone' => $phone,
-                'amount' => (int) $amount,
-                'account_reference' => $accountRef,
+                'client_id'           => $invoice->client_id,
+                'invoice_id'          => $invoice->id,
+                'phone'               => $phone,
+                'amount'              => (int) $amount,
+                'account_reference'   => $accountRef,
                 'merchant_request_id' => $json['MerchantRequestID'] ?? null,
                 'checkout_request_id' => $json['CheckoutRequestID'] ?? null,
-                'result_code' => $json['ResponseCode'] ?? null,
-                'result_desc' => $json['ResponseDescription'] ?? ($json['errorMessage'] ?? null),
-                'status' => isset($json['CheckoutRequestID']) ? 'pending' : 'failed',
-                'raw_request' => $requestPayload,
+                'result_code'         => $json['ResponseCode'] ?? null,
+                'result_desc'         => $json['ResponseDescription'] ?? ($json['errorMessage'] ?? null),
+                'status'              => isset($json['CheckoutRequestID']) ? 'pending' : 'failed',
+                'raw_request'         => $requestPayload,
             ]);
 
             return $json;
 
         } catch (Exception $e) {
-            Log::error('STK Push Error: ' . $e->getMessage());
+            Log::error('STK Push Error', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return ['error' => $e->getMessage()];
         }
     }
 
-    // Handle STK Callback
+    // -------------------------------------------------------------------------
+    // STK Callback — idempotency-safe
+    //
+    // RACE CONDITION FIXED:
+    // The original code checked $tx->status === 'completed' BEFORE acquiring any
+    // lock. Under concurrent Safaricom retries two processes could both pass that
+    // check, both enter DB::transaction(), and both call recordPayment() — producing
+    // a duplicate payment row.
+    //
+    // THE FIX:
+    // 1. Wrap the ENTIRE check-and-update inside a single DB::transaction().
+    // 2. Re-fetch the MpesaTransaction row with lockForUpdate() as the FIRST
+    //    statement inside that transaction. The DB engine now serialises concurrent
+    //    callbacks — the second one blocks on the lock until the first commits,
+    //    then re-reads status = 'completed' and exits.
+    // 3. The unique index on payments.idempotency_key is the final safety net:
+    //    even if two processes somehow both get past the lock, the DB rejects the
+    //    second INSERT with a unique constraint violation rather than silently
+    //    creating a duplicate payment row.
+    // -------------------------------------------------------------------------
+
     public function handleStkCallback(array $payload): bool
     {
         try {
             $body = $payload['Body']['stkCallback'] ?? null;
             if (!$body) {
-                Log::warning('STK Callback missing Body.stkCallback');
+                Log::warning('STK Callback: missing Body.stkCallback', ['payload' => $payload]);
                 return false;
             }
 
@@ -111,72 +140,128 @@ class MpesaService
             $resultDesc = $body['ResultDesc'] ?? null;
 
             if (!$checkoutId) {
-                Log::warning('STK Callback missing CheckoutRequestID');
+                Log::warning('STK Callback: missing CheckoutRequestID');
                 return false;
             }
 
-            $tx = MpesaTransaction::where('checkout_request_id', $checkoutId)->first();
-            if (!$tx) {
-                Log::warning('STK Callback received for unknown CheckoutRequestID: ' . $checkoutId);
-                return false;
-            }
-
-            // Idempotency: ignore duplicate callbacks once completed.
-            if ($tx->status === 'completed') {
-                return true;
-            }
-
-            $metadata = $body['CallbackMetadata']['Item'] ?? [];
-            $amount = $this->getMetadataValue($metadata, 'Amount');
+            // Pull the metadata out before entering the transaction so we're not
+            // doing work inside the locked section unnecessarily.
+            $metadata  = $body['CallbackMetadata']['Item'] ?? [];
+            $amount    = $this->getMetadataValue($metadata, 'Amount');
             $mpesaCode = $this->getMetadataValue($metadata, 'MpesaReceiptNumber');
-            $phone = $this->getMetadataValue($metadata, 'PhoneNumber');
+            $phone     = $this->getMetadataValue($metadata, 'PhoneNumber');
 
-            $tx->update([
-                'result_code' => $resultCode,
-                'result_desc' => $resultDesc,
-                'raw_callback' => $payload,
-                'mpesa_receipt_number' => $mpesaCode ?: $tx->mpesa_receipt_number,
-                'phone' => $phone ? (string) $phone : $tx->phone,
-                'amount' => $amount ?: $tx->amount,
-                'status' => ((int) $resultCode === 0) ? 'pending' : 'failed',
-            ]);
+            // ---------------------------------------------------------------
+            // CRITICAL SECTION — everything inside here is serialised per
+            // CheckoutRequestID by the database row lock.
+            // ---------------------------------------------------------------
+            DB::transaction(function () use (
+                $checkoutId, $resultCode, $resultDesc,
+                $amount, $mpesaCode, $phone, $payload
+            ) {
+                // Step 1: Acquire an exclusive lock on this MpesaTransaction row.
+                // Any concurrent callback for the same CheckoutRequestID will block
+                // here until we commit, then re-read status = 'completed' and abort.
+                $tx = MpesaTransaction::where('checkout_request_id', $checkoutId)
+                    ->lockForUpdate()
+                    ->first();
 
-            if ((int) $resultCode !== 0) {
-                Log::warning('STK Push failed: ' . ($resultDesc ?? 'Unknown'));
-                return false;
-            }
-
-            $invoiceId = $tx->invoice_id;
-            $clientId = $tx->client_id;
-
-            DB::transaction(function () use ($invoiceId, $clientId, $amount, $mpesaCode, $checkoutId, $tx) {
-                if ($invoiceId) {
-                    // Lock invoice row to avoid concurrent pay/overpay races.
-                    Invoice::whereKey($invoiceId)->lockForUpdate()->first();
+                if (!$tx) {
+                    Log::warning('STK Callback: unknown CheckoutRequestID', ['checkout_id' => $checkoutId]);
+                    return; // Nothing to process — let Safaricom retry if it wants.
                 }
 
+                // Step 2: Re-check terminal status AFTER acquiring the lock.
+                // This is the authoritative check — not the one before the transaction.
+                if ($tx->status === 'completed' || $tx->status === 'failed') {
+                    Log::info('STK Callback: duplicate callback ignored', [
+                        'checkout_id' => $checkoutId,
+                        'status'      => $tx->status,
+                    ]);
+                    return;
+                }
+
+                // Step 3: Resolve final status — do this before any writes.
+                $isSuccess = (int) $resultCode === 0;
+
+                // Step 4: Update the transaction record with everything we know.
+                // We go straight to the terminal state ('completed' or 'failed') —
+                // never back to 'pending'. The intermediate write in the original
+                // code left a window where status was 'pending' after the update
+                // but before the payment was recorded.
+                $tx->update([
+                    'result_code'          => $resultCode,
+                    'result_desc'          => $resultDesc,
+                    'raw_callback'         => $payload,
+                    'mpesa_receipt_number' => $mpesaCode ?? $tx->mpesa_receipt_number,
+                    'phone'                => $phone ? (string) $phone : $tx->phone,
+                    'amount'               => $amount ?? $tx->amount,
+                    'status'               => $isSuccess ? 'completed' : 'failed',
+                ]);
+
+                if (!$isSuccess) {
+                    Log::warning('STK Push failed by user or network', [
+                        'checkout_id' => $checkoutId,
+                        'result_desc' => $resultDesc,
+                        'result_code' => $resultCode,
+                    ]);
+                    return;
+                }
+
+                // Step 5: Lock the invoice row to prevent concurrent overpay race.
+                // This is a separate from the MpesaTransaction lock — we need both.
+                if ($tx->invoice_id) {
+                    Invoice::whereKey($tx->invoice_id)->lockForUpdate()->first();
+                }
+
+                // Step 6: Record the payment.
+                // The idempotency_key maps to the UNIQUE index on payments.idempotency_key.
+                // If this INSERT somehow races past both locks (should not happen), the DB
+                // unique constraint rejects the duplicate and the outer try/catch logs it.
                 $this->paymentService->recordPayment([
-                    'client_id' => $clientId,
-                    'invoice_id' => $invoiceId,
-                    'amount' => $amount,
-                    'method' => 'mpesa',
-                    'mpesa_code' => $mpesaCode,
-                    'reference' => $checkoutId,
-                    'idempotency_key' => $mpesaCode ?: $checkoutId,
+                    'client_id'       => $tx->client_id,
+                    'invoice_id'      => $tx->invoice_id,
+                    'amount'          => $amount ?? $tx->amount,
+                    'method'          => 'mpesa',
+                    'mpesa_code'      => $mpesaCode,
+                    'reference'       => $checkoutId,
+                    'idempotency_key' => $mpesaCode ?? $checkoutId,
                 ], null);
 
-                $tx->update(['status' => 'completed']);
+                Log::info('STK Callback: payment recorded', [
+                    'checkout_id'  => $checkoutId,
+                    'mpesa_code'   => $mpesaCode,
+                    'amount'       => $amount ?? $tx->amount,
+                    'client_id'    => $tx->client_id,
+                    'invoice_id'   => $tx->invoice_id,
+                ]);
             });
 
             return true;
 
         } catch (Exception $e) {
-            Log::error('STK Callback Error: ' . $e->getMessage());
+            // Catch unique constraint violations here — they mean a duplicate payment
+            // was already recorded. Log it and return true so Safaricom stops retrying.
+            if ($this->isDuplicateKeyException($e)) {
+                Log::warning('STK Callback: duplicate payment blocked by unique constraint', [
+                    'checkout_id' => $checkoutId ?? null,
+                    'message'     => $e->getMessage(),
+                ]);
+                return true; // Tell Safaricom we received it — no point in retrying.
+            }
+
+            Log::error('STK Callback Error', [
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
             return false;
         }
     }
 
-    // Handle C2B Confirmation
+    // -------------------------------------------------------------------------
+    // C2B Confirmation
+    // -------------------------------------------------------------------------
+
     public function handleC2BConfirmation(array $payload): bool
     {
         try {
@@ -185,32 +270,51 @@ class MpesaService
             $phone     = $payload['MSISDN'];
             $account   = $payload['BillRefNumber'];
 
-            $client = Client::where('phone', 'like', '%' . substr($phone, -9))->first();
+            // C2B also needs idempotency — the same TransID should never be recorded twice.
+            DB::transaction(function () use ($amount, $mpesaCode, $phone, $account) {
+                $client = Client::where('phone', 'like', '%' . substr($phone, -9))->first();
 
-            if (!$client) return false;
+                if (!$client) {
+                    Log::warning('C2B Confirmation: no client found for phone', ['phone' => $phone]);
+                    return;
+                }
 
-            $invoice = Invoice::where('client_id', $client->id)
-                              ->where('status', 'unpaid')
-                              ->orderBy('created_at', 'asc')
-                              ->first();
+                // Lock the oldest unpaid invoice to prevent concurrent C2B races.
+                $invoice = Invoice::where('client_id', $client->id)
+                    ->where('status', 'unpaid')
+                    ->orderBy('created_at', 'asc')
+                    ->lockForUpdate()
+                    ->first();
 
-            $this->paymentService->recordPayment([
-                'client_id'  => $client->id,
-                'invoice_id' => $invoice?->id,
-                'amount'     => $amount,
-                'method'     => 'mpesa',
-                'mpesa_code' => $mpesaCode,
-                'reference'  => $account,
-                'idempotency_key' => $mpesaCode ?: $account,
-            ], null);
+                $this->paymentService->recordPayment([
+                    'client_id'       => $client->id,
+                    'invoice_id'      => $invoice?->id,
+                    'amount'          => $amount,
+                    'method'          => 'mpesa',
+                    'mpesa_code'      => $mpesaCode,
+                    'reference'       => $account,
+                    'idempotency_key' => $mpesaCode, // TransID is globally unique — safe dedup key.
+                ], null);
+            });
 
             return true;
 
         } catch (Exception $e) {
-            Log::error('C2B Confirmation Error: ' . $e->getMessage());
+            if ($this->isDuplicateKeyException($e)) {
+                Log::warning('C2B Confirmation: duplicate TransID blocked', [
+                    'trans_id' => $payload['TransID'] ?? null,
+                ]);
+                return true;
+            }
+
+            Log::error('C2B Confirmation Error', ['message' => $e->getMessage()]);
             return false;
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
 
     private function formatPhone(string $phone): string
     {
@@ -235,5 +339,18 @@ class MpesaService
             }
         }
         return null;
+    }
+
+    /**
+     * Detect a MySQL/MariaDB duplicate key (unique constraint) violation.
+     * PDO throws this as a generic Exception wrapping a QueryException;
+     * the SQLSTATE for duplicate key is 23000 and the MySQL error code is 1062.
+     */
+    private function isDuplicateKeyException(Exception $e): bool
+    {
+        $message = $e->getMessage();
+        return str_contains($message, '1062')
+            || str_contains($message, 'Duplicate entry')
+            || str_contains($message, 'UNIQUE constraint failed');
     }
 }
