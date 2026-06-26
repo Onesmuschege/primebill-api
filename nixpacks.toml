@@ -1,0 +1,23 @@
+# nixpacks.toml
+# Pins the exact PHP version and extensions Railway's Nixpacks builder installs.
+# Without this, Railway may pick PHP 8.1 or miss required extensions.
+
+[phases.setup]
+nixPkgs = [
+  "php83",
+  "php83Packages.composer",
+]
+
+# PHP extensions required by Laravel 11 + PrimeBill dependencies.
+# php83Extensions.* maps to the Nix package names.
+nixLibs = []
+
+[phases.build]
+cmds = [
+  "composer install --no-dev --optimize-autoloader --no-interaction",
+  "php artisan optimize",
+  "php artisan storage:link",
+]
+
+[start]
+cmd = "php artisan serve --host=0.0.0.0 --port=$PORT"

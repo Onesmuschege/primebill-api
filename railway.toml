@@ -1,0 +1,32 @@
+# railway.toml
+# Place this in the root of your Laravel (primebill-api) repository.
+#
+# Railway uses Nixpacks to auto-detect PHP projects. This file overrides
+# the defaults to ensure the correct PHP version, extensions, queue worker,
+# and scheduler are configured for production.
+
+[build]
+builder = "nixpacks"
+
+# Nixpacks PHP build command — installs Composer deps without dev packages,
+# runs Laravel production optimisations, and caches config/routes/views.
+# php artisan optimize runs: config:cache + route:cache + view:cache in one command.
+buildCommand = """
+composer install --no-dev --optimize-autoloader --no-interaction && \
+php artisan optimize && \
+php artisan storage:link
+"""
+
+[deploy]
+# Start PHP-FPM + Nginx via the standard Laravel Nixpacks start command.
+# Railway injects PORT automatically — the Nixpacks PHP template reads it.
+startCommand = "php artisan serve --host=0.0.0.0 --port=$PORT"
+
+# Health check — Railway will restart the service if this returns non-200.
+# /api/health is a lightweight endpoint we create in Task 13.
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+
+# Restart policy — restart on crash, up to 3 times before alerting.
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
