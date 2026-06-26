@@ -9,19 +9,36 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            // ── Existing seeders (do not reorder — roles must exist before users) ──
+            // ── Core (order matters: roles before users) ──────────────────────
             RolesAndPermissionsSeeder::class,
             AdminUserSeeder::class,
             SettingsSeeder::class,
+
+            // ── Network infrastructure ────────────────────────────────────────
+            RouterSeeder::class,        // NEW: router needed by plans + traffic
+
+            // ── Plans (depend on router) ──────────────────────────────────────
             PlanSeeder::class,
 
-            // ── New test-data seeders (order matters — foreign key dependencies) ──
-            // 1. Clients first — invoices and payments reference client_id
-            ClientSeeder::class,
-            // 2. Invoices second — payments reference invoice_id
+            // ── Subscribers ───────────────────────────────────────────────────
+            ClientSeeder::class,        // clients
+            ClientAccountSeeder::class, // NEW: PPPoE accounts per client
+
+            // ── Billing ───────────────────────────────────────────────────────
             InvoiceSeeder::class,
-            // 3. Payments last — depends on both clients and invoices being present
             PaymentSeeder::class,
+            LedgerSeeder::class,        // NEW: ledger entries per payment
+
+            // ── Support & comms ───────────────────────────────────────────────
+            TicketSeeder::class,        // NEW: tickets + replies
+            SmsLogSeeder::class,        // NEW: SMS logs
+
+            // ── Network data ──────────────────────────────────────────────────
+            NetworkTrafficSeeder::class, // NEW: 7 days hourly traffic
+
+            // ── Finance & inventory ───────────────────────────────────────────
+            ExpenditureSeeder::class,   // NEW: expenses
+            InventorySeeder::class,     // NEW: equipment inventory
         ]);
     }
 }
