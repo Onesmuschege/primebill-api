@@ -84,7 +84,7 @@ class FreeRadiusAdapter implements RadiusAdapterInterface
 
             $this->createUser([
                 'username'   => $account->username,
-                'password'   => 'sync-placeholder',
+                'password'   => $account->password,
                 'group'      => $account->plan->name,
                 'rate_limit' => $this->buildRateLimit($account->plan),
             ]);

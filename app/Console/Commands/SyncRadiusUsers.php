@@ -25,7 +25,7 @@ class SyncRadiusUsers extends Command
 
             $radiusAdapter->createUser([
                 'username'   => $account->username,
-                'password'   => 'requires-reprovision',
+                'password'   => $account->password,
                 'group'      => $account->plan->name,
                 'rate_limit' => ($account->plan->speed_up ?? 512) . 'k/' . ($account->plan->speed_down ?? 1024) . 'k',
             ]);

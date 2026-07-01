@@ -2,6 +2,7 @@
 
 namespace App\Services\Mpesa;
 
+use App\Jobs\ActivateNetworkAccessJob;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\MpesaTransaction;
@@ -82,7 +83,6 @@ class MpesaService
 
             $json = $response->json() ?? [];
 
-            // Track STK request so the callback can reconcile against it.
             MpesaTransaction::create([
                 'client_id'           => $invoice->client_id,
                 'invoice_id'          => $invoice->id,
@@ -106,24 +106,7 @@ class MpesaService
     }
 
     // -------------------------------------------------------------------------
-    // STK Callback — idempotency-safe
-    //
-    // RACE CONDITION FIXED:
-    // The original code checked $tx->status === 'completed' BEFORE acquiring any
-    // lock. Under concurrent Safaricom retries two processes could both pass that
-    // check, both enter DB::transaction(), and both call recordPayment() — producing
-    // a duplicate payment row.
-    //
-    // THE FIX:
-    // 1. Wrap the ENTIRE check-and-update inside a single DB::transaction().
-    // 2. Re-fetch the MpesaTransaction row with lockForUpdate() as the FIRST
-    //    statement inside that transaction. The DB engine now serialises concurrent
-    //    callbacks — the second one blocks on the lock until the first commits,
-    //    then re-reads status = 'completed' and exits.
-    // 3. The unique index on payments.idempotency_key is the final safety net:
-    //    even if two processes somehow both get past the lock, the DB rejects the
-    //    second INSERT with a unique constraint violation rather than silently
-    //    creating a duplicate payment row.
+    // STK Callback — idempotency-safe (unchanged locking/dedup logic)
     // -------------------------------------------------------------------------
 
     public function handleStkCallback(array $payload): bool
@@ -144,35 +127,26 @@ class MpesaService
                 return false;
             }
 
-            // Pull the metadata out before entering the transaction so we're not
-            // doing work inside the locked section unnecessarily.
             $metadata  = $body['CallbackMetadata']['Item'] ?? [];
             $amount    = $this->getMetadataValue($metadata, 'Amount');
             $mpesaCode = $this->getMetadataValue($metadata, 'MpesaReceiptNumber');
             $phone     = $this->getMetadataValue($metadata, 'PhoneNumber');
 
-            // ---------------------------------------------------------------
-            // CRITICAL SECTION — everything inside here is serialised per
-            // CheckoutRequestID by the database row lock.
-            // ---------------------------------------------------------------
+            $reactivateClientId = null;
+
             DB::transaction(function () use (
                 $checkoutId, $resultCode, $resultDesc,
-                $amount, $mpesaCode, $phone, $payload
+                $amount, $mpesaCode, $phone, $payload, &$reactivateClientId
             ) {
-                // Step 1: Acquire an exclusive lock on this MpesaTransaction row.
-                // Any concurrent callback for the same CheckoutRequestID will block
-                // here until we commit, then re-read status = 'completed' and abort.
                 $tx = MpesaTransaction::where('checkout_request_id', $checkoutId)
                     ->lockForUpdate()
                     ->first();
 
                 if (!$tx) {
                     Log::warning('STK Callback: unknown CheckoutRequestID', ['checkout_id' => $checkoutId]);
-                    return; // Nothing to process — let Safaricom retry if it wants.
+                    return;
                 }
 
-                // Step 2: Re-check terminal status AFTER acquiring the lock.
-                // This is the authoritative check — not the one before the transaction.
                 if ($tx->status === 'completed' || $tx->status === 'failed') {
                     Log::info('STK Callback: duplicate callback ignored', [
                         'checkout_id' => $checkoutId,
@@ -181,14 +155,8 @@ class MpesaService
                     return;
                 }
 
-                // Step 3: Resolve final status — do this before any writes.
                 $isSuccess = (int) $resultCode === 0;
 
-                // Step 4: Update the transaction record with everything we know.
-                // We go straight to the terminal state ('completed' or 'failed') —
-                // never back to 'pending'. The intermediate write in the original
-                // code left a window where status was 'pending' after the update
-                // but before the payment was recorded.
                 $tx->update([
                     'result_code'          => $resultCode,
                     'result_desc'          => $resultDesc,
@@ -208,16 +176,10 @@ class MpesaService
                     return;
                 }
 
-                // Step 5: Lock the invoice row to prevent concurrent overpay race.
-                // This is a separate from the MpesaTransaction lock — we need both.
                 if ($tx->invoice_id) {
                     Invoice::whereKey($tx->invoice_id)->lockForUpdate()->first();
                 }
 
-                // Step 6: Record the payment.
-                // The idempotency_key maps to the UNIQUE index on payments.idempotency_key.
-                // If this INSERT somehow races past both locks (should not happen), the DB
-                // unique constraint rejects the duplicate and the outer try/catch logs it.
                 $this->paymentService->recordPayment([
                     'client_id'       => $tx->client_id,
                     'invoice_id'      => $tx->invoice_id,
@@ -235,19 +197,27 @@ class MpesaService
                     'client_id'    => $tx->client_id,
                     'invoice_id'   => $tx->invoice_id,
                 ]);
+
+                // Flag this client for reactivation check AFTER the transaction
+                // commits — we deliberately do it outside DB::transaction() so
+                // the invoice/payment locks are released before we query for
+                // remaining overdue invoices below.
+                $reactivateClientId = $tx->client_id;
             });
+
+            if ($reactivateClientId) {
+                $this->reactivateIfClear($reactivateClientId);
+            }
 
             return true;
 
         } catch (Exception $e) {
-            // Catch unique constraint violations here — they mean a duplicate payment
-            // was already recorded. Log it and return true so Safaricom stops retrying.
             if ($this->isDuplicateKeyException($e)) {
                 Log::warning('STK Callback: duplicate payment blocked by unique constraint', [
                     'checkout_id' => $checkoutId ?? null,
                     'message'     => $e->getMessage(),
                 ]);
-                return true; // Tell Safaricom we received it — no point in retrying.
+                return true;
             }
 
             Log::error('STK Callback Error', [
@@ -270,8 +240,9 @@ class MpesaService
             $phone     = $payload['MSISDN'];
             $account   = $payload['BillRefNumber'];
 
-            // C2B also needs idempotency — the same TransID should never be recorded twice.
-            DB::transaction(function () use ($amount, $mpesaCode, $phone, $account) {
+            $reactivateClientId = null;
+
+            DB::transaction(function () use ($amount, $mpesaCode, $phone, $account, &$reactivateClientId) {
                 $client = Client::where('phone', 'like', '%' . substr($phone, -9))->first();
 
                 if (!$client) {
@@ -279,7 +250,6 @@ class MpesaService
                     return;
                 }
 
-                // Lock the oldest unpaid invoice to prevent concurrent C2B races.
                 $invoice = Invoice::where('client_id', $client->id)
                     ->where('status', 'unpaid')
                     ->orderBy('created_at', 'asc')
@@ -293,9 +263,15 @@ class MpesaService
                     'method'          => 'mpesa',
                     'mpesa_code'      => $mpesaCode,
                     'reference'       => $account,
-                    'idempotency_key' => $mpesaCode, // TransID is globally unique — safe dedup key.
+                    'idempotency_key' => $mpesaCode,
                 ], null);
+
+                $reactivateClientId = $client->id;
             });
+
+            if ($reactivateClientId) {
+                $this->reactivateIfClear($reactivateClientId);
+            }
 
             return true;
 
@@ -310,6 +286,44 @@ class MpesaService
             Log::error('C2B Confirmation Error', ['message' => $e->getMessage()]);
             return false;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Reactivation — mirrors App\Console\Commands\ReactivatePaidAccounts,
+    // scoped to a single client and triggered immediately on payment instead
+    // of waiting for the next scheduled run. This is the only piece that was
+    // actually missing: ReactivatePaidAccounts only catches this client on
+    // its next cron tick, so without this, a client who just paid stays
+    // offline until that job happens to run.
+    // -------------------------------------------------------------------------
+
+    private function reactivateIfClear(int $clientId): void
+    {
+        $client = Client::find($clientId);
+
+        if (!$client || $client->status !== 'suspended') {
+            return;
+        }
+
+        $hasOverdue = Invoice::where('client_id', $clientId)
+            ->whereIn('status', ['overdue', 'unpaid'])
+            ->where('due_date', '<', now())
+            ->exists();
+
+        if ($hasOverdue) {
+            return;
+        }
+
+        foreach ($client->accounts()->where('status', 'suspended')->get() as $account) {
+            $account->update(['status' => 'active']);
+            ActivateNetworkAccessJob::dispatch($account->id);
+        }
+
+        $client->update(['status' => 'active']);
+
+        Log::info('MpesaService: client reactivated immediately after payment', [
+            'client_id' => $clientId,
+        ]);
     }
 
     // -------------------------------------------------------------------------
@@ -341,11 +355,6 @@ class MpesaService
         return null;
     }
 
-    /**
-     * Detect a MySQL/MariaDB duplicate key (unique constraint) violation.
-     * PDO throws this as a generic Exception wrapping a QueryException;
-     * the SQLSTATE for duplicate key is 23000 and the MySQL error code is 1062.
-     */
     private function isDuplicateKeyException(Exception $e): bool
     {
         $message = $e->getMessage();

@@ -190,20 +190,19 @@ class PaymentService
         ActivateNetworkAccessJob::dispatch($account->id);
     }
 
+    /**
+     * All-time payment summary (not date-scoped).
+     * Card labels on the frontend should read "Total Payments" / "M-Pesa" / "Cash"
+     * rather than "Today's Total" to match this.
+     */
     public function getDailySummary(): array
     {
-        $today = now()->toDateString();
-
         return [
-            'total' => Payment::whereDate('created_at', $today)
+            'total' => Payment::where('status', 'completed')->sum('amount'),
+            'count' => Payment::where('status', 'completed')->count(),
+            'mpesa' => Payment::where('method', 'mpesa')
                 ->where('status', 'completed')->sum('amount'),
-            'count' => Payment::whereDate('created_at', $today)
-                ->where('status', 'completed')->count(),
-            'mpesa' => Payment::whereDate('created_at', $today)
-                ->where('method', 'mpesa')
-                ->where('status', 'completed')->sum('amount'),
-            'cash'  => Payment::whereDate('created_at', $today)
-                ->where('method', 'cash')
+            'cash'  => Payment::where('method', 'cash')
                 ->where('status', 'completed')->sum('amount'),
         ];
     }

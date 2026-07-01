@@ -23,6 +23,7 @@ use App\Http\Controllers\Portal\PortalInvoiceController;
 use App\Http\Controllers\Portal\PortalPaymentController;
 use App\Http\Controllers\Portal\PortalTicketController;
 use App\Http\Controllers\Portal\PortalProfileController;
+use App\Http\Controllers\Portal\CaptivePortalController;
 use App\Http\Controllers\Api\RadiusController;
 use App\Http\Controllers\Api\RadiusAccountingController;
 use App\Http\Controllers\Portal\PortalRegisterController;
@@ -53,6 +54,24 @@ Route::prefix('auth')->group(function () {
 Route::prefix('portal')->group(function () {
     Route::post('/register', [PortalRegisterController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/login', [PortalAuthController::class, 'login'])->middleware('throttle:10,1');
+
+    // Captive portal (hotspot) routes — intentionally public, no Sanctum auth.
+    // MikroTik redirects unauthenticated hotspot clients here directly.
+    // Throttles are split per-endpoint since /pay triggers a real M-Pesa
+    // STK push and /status is an enumeration target.
+    Route::prefix('captive')->group(function () {
+        Route::middleware('throttle:60,1')->group(function () {
+            Route::get('/plans', [CaptivePortalController::class, 'plans']);
+        });
+
+        Route::middleware('throttle:20,1')->group(function () {
+            Route::get('/status/{username}', [CaptivePortalController::class, 'status']);
+        });
+
+        Route::middleware('throttle:5,1')->group(function () {
+            Route::post('/pay', [CaptivePortalController::class, 'pay']);
+        });
+    });
 
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/logout', [PortalAuthController::class, 'logout']);
