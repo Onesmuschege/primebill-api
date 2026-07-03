@@ -85,11 +85,14 @@ class DashboardService
 
     private function getAccountStatus(): array
     {
+        $activeUsers  = $this->getActiveUsers();
+        $totalClients = $this->safe(fn() => Client::count(), 0);
+
         return [
-            'online'   => $this->getActiveUsers(),
-            'offline'  => $this->safe(fn() => Client::count(), 0),
-            'overdue'  => $this->safe(fn() => Invoice::where('status', 'overdue')->distinct('client_id')->count('client_id'), 0),
-            'suspended'=> $this->safe(fn() => ClientAccount::where('status', 'suspended')->count(), 0),
+            'online'    => $activeUsers,
+            'offline'   => max(0, $totalClients - $activeUsers),
+            'overdue'   => $this->safe(fn() => Invoice::where('status', 'overdue')->distinct('client_id')->count('client_id'), 0),
+            'suspended' => $this->safe(fn() => ClientAccount::where('status', 'suspended')->count(), 0),
         ];
     }
 
