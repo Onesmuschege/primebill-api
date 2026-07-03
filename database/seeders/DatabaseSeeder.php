@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             // ── Subscribers ───────────────────────────────────────────────────
             ClientSeeder::class,        // clients
             ClientAccountSeeder::class, // NEW: PPPoE accounts per client
+            RadiusSessionSeeder::class, // NEW: active/closed RADIUS sessions for dashboard
 
             // ── Billing ───────────────────────────────────────────────────────
             InvoiceSeeder::class,
