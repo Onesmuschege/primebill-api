@@ -4,44 +4,51 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class LoyaltyPoints extends Model
+class LoyaltyPoint extends Model
 {
-    protected $fillable = ['client_id', 'balance', 'expires_at'];
+    protected $fillable = [
+        'client_id', 'points', 'type', 'reason',
+        'reference_type', 'reference_id', 'expires_at',
+    ];
 
-    protected $casts = ['expires_at' => 'datetime'];
+    protected $casts = [
+        'expires_at' => 'datetime',
+    ];
 
-    public function client()
+    public function client()    { return $this->belongsTo(Client::class); }
+    public function reference() { return $this->morphTo(); }
+
+    // ── Service helper ──────────────────────────────────────────────────────
+
+    public static function award(int $clientId, int $points, string $reason, $reference = null): void
     {
-        return $this->belongsTo(Client::class);
-    }
-
-    public function transactions()
-    {
-        return $this->hasMany(LoyaltyTransaction::class);
-    }
-
-    public function addPoints(int $points, string $reason, ?string $referenceType = null, ?int $referenceId = null): void
-    {
-        $this->increment('balance', $points);
-        $this->transactions()->create([
-            'points' => $points,
-            'type' => 'earned',
-            'reason' => $reason,
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId,
+        static::create([
+            'client_id'      => $clientId,
+            'points'         => $points,
+            'type'           => 'earned',
+            'reason'         => $reason,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id'   => $reference?->id,
         ]);
+
+        Client::whereKey($clientId)->increment('loyalty_points_balance', $points);
     }
 
-    public function redeemPoints(int $points, string $reason): bool
+    public static function redeem(int $clientId, int $points, string $reason, $reference = null): bool
     {
-        if ($this->balance < $points) return false;
-        
-        $this->decrement('balance', $points);
-        $this->transactions()->create([
-            'points' => -$points,
-            'type' => 'redeemed',
-            'reason' => $reason,
+        $client = Client::find($clientId);
+        if (!$client || $client->loyalty_points_balance < $points) return false;
+
+        static::create([
+            'client_id'      => $clientId,
+            'points'         => -$points,
+            'type'           => 'redeemed',
+            'reason'         => $reason,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id'   => $reference?->id,
         ]);
+
+        $client->decrement('loyalty_points_balance', $points);
         return true;
     }
 }
