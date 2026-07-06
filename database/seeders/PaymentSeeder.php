@@ -34,12 +34,15 @@ class PaymentSeeder extends Seeder
 
         $paidInvoices = Invoice::where('status', 'paid')
             ->with('client')
+            ->orderBy('id')
             ->get();
+
+        $monthsAgoSequence = $this->buildMonthsAgoSequence($paidInvoices->count());
 
         $seeded  = 0;
         $skipped = 0;
 
-        foreach ($paidInvoices as $invoice) {
+        foreach ($paidInvoices as $index => $invoice) {
             // Avoid re-creating if a payment already exists for this invoice.
             if (Payment::where('invoice_id', $invoice->id)->exists()) {
                 $skipped++;
@@ -50,7 +53,14 @@ class PaymentSeeder extends Seeder
             $mpesaCode  = $method !== 'cash' ? $this->generateMpesaCode($invoice->id) : null;
             $idempotKey = $mpesaCode ?? (string) Str::uuid();
 
-            Payment::updateOrCreate(
+            // Spread payments across the last 12 months (growth curve) rather
+            // than clustering around invoice->paid_at, which only spans ~90 days.
+            $paidAt = Carbon::now()
+                ->subMonths($monthsAgoSequence[$index])
+                ->subDays(($invoice->id * 3) % 27)
+                ->setTime(9 + ($invoice->id % 8), ($invoice->id * 11) % 60);
+
+            $payment = Payment::updateOrCreate(
                 ['idempotency_key' => $idempotKey],
                 [
                     'client_id'       => $invoice->client_id,
@@ -64,15 +74,48 @@ class PaymentSeeder extends Seeder
                     'idempotency_key' => $idempotKey,
                     'status'          => 'completed',
                     'recorded_by'     => $adminId,
-                    'created_at'      => $invoice->paid_at ?? Carbon::now(),
-                    'updated_at'      => $invoice->paid_at ?? Carbon::now(),
                 ]
             );
+
+            // created_at/updated_at aren't mass-assignable — forceFill bypasses
+            // that and marks them dirty, so Eloquent won't overwrite with now().
+            $payment->forceFill([
+                'created_at' => $paidAt,
+                'updated_at' => $paidAt,
+            ])->save();
 
             $seeded++;
         }
 
         $this->command->info("PaymentSeeder: {$seeded} payments seeded, {$skipped} skipped (already exist).");
+    }
+
+    /**
+     * Build a list of "months ago" values, one per payment, following the
+     * same growth curve as ClientSeeder — slower activity further in the
+     * past, accelerating toward the present. Always returns exactly $total values.
+     */
+    private function buildMonthsAgoSequence(int $total): array
+    {
+        $weights = [11 => 1, 10 => 1, 9 => 2, 8 => 2, 7 => 2, 6 => 3, 5 => 3, 4 => 4, 3 => 4, 2 => 5, 1 => 6, 0 => 7];
+        $weightSum = array_sum($weights);
+
+        $sequence = [];
+        foreach ($weights as $monthsAgo => $weight) {
+            $count = (int) round($total * $weight / $weightSum);
+            for ($i = 0; $i < $count; $i++) {
+                $sequence[] = $monthsAgo;
+            }
+        }
+
+        while (count($sequence) > $total) {
+            array_pop($sequence);
+        }
+        while (count($sequence) < $total) {
+            $sequence[] = 0;
+        }
+
+        return $sequence;
     }
 
     /**
