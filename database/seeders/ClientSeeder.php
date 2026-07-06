@@ -31,15 +31,60 @@ class ClientSeeder extends Seeder
         $adminId = User::where('email', 'admin@primebill.co.ke')->value('id');
 
         $clients = $this->clientData();
+        $monthsAgoSequence = $this->buildMonthsAgoSequence(count($clients));
 
-        foreach ($clients as $client) {
-            Client::updateOrCreate(
+        foreach ($clients as $i => $client) {
+            // Deterministic day offset so re-runs are stable, but avoid every
+            // client landing on the 1st of the month.
+            $createdAt = now()
+                ->subMonths($monthsAgoSequence[$i])
+                ->subDays(($i * 5) % 27)
+                ->setTime(9 + ($i % 8), ($i * 7) % 60);
+
+            $client = Client::updateOrCreate(
                 ['phone' => $client['phone']],
                 array_merge($client, ['created_by' => $adminId])
             );
+
+            // created_at/updated_at aren't mass-assignable — forceFill bypasses
+            // that and marks them dirty, so Eloquent won't overwrite with now().
+            $client->forceFill([
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
+            ])->save();
         }
 
         $this->command->info('ClientSeeder: ' . count($clients) . ' clients seeded.');
+    }
+
+    /**
+     * Build a list of "months ago" values, one per client, following a
+     * realistic ISP growth curve — slower signups further in the past,
+     * accelerating toward the present. Always returns exactly $total values.
+     */
+    private function buildMonthsAgoSequence(int $total): array
+    {
+        // monthsAgo => relative weight (11 = a year ago, 0 = this month)
+        $weights = [11 => 1, 10 => 1, 9 => 2, 8 => 2, 7 => 2, 6 => 3, 5 => 3, 4 => 4, 3 => 4, 2 => 5, 1 => 6, 0 => 7];
+        $weightSum = array_sum($weights);
+
+        $sequence = [];
+        foreach ($weights as $monthsAgo => $weight) {
+            $count = (int) round($total * $weight / $weightSum);
+            for ($i = 0; $i < $count; $i++) {
+                $sequence[] = $monthsAgo;
+            }
+        }
+
+        // Rounding can leave us a couple short/over — trim, or pad with the most recent month.
+        while (count($sequence) > $total) {
+            array_pop($sequence);
+        }
+        while (count($sequence) < $total) {
+            $sequence[] = 0;
+        }
+
+        return $sequence;
     }
 
     private function clientData(): array
