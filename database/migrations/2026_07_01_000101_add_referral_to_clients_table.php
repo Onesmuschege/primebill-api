@@ -8,9 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // referral_code and referred_by are already added in
+        // 2026_07_01_000100_create_loyalty_points_table.php — only add
+        // the columns that migration doesn't cover.
         Schema::table('clients', function (Blueprint $table) {
-            $table->string('referral_code', 16)->unique()->nullable()->after('status');
-            $table->foreignId('referred_by')->nullable()->constrained('clients')->nullOnDelete();
             $table->integer('referral_count')->default(0);
             $table->integer('referral_bonus')->default(0);
         });
@@ -19,7 +20,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('clients', function (Blueprint $table) {
-            $table->dropColumn(['referral_code', 'referred_by', 'referral_count', 'referral_bonus']);
+            $table->dropColumn(['referral_count', 'referral_bonus']);
         });
     }
 };
