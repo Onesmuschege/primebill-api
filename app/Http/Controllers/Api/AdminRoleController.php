@@ -14,7 +14,7 @@ class AdminRoleController extends Controller
     {
         $roles = Role::with('permissions')
             ->where('name', '!=', 'super_admin')
-            ->paginate(15);
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -25,9 +25,7 @@ class AdminRoleController extends Controller
     // GET /api/admin/permissions
     public function permissions()
     {
-        $permissions = Permission::all()->groupBy(function ($p) {
-            return explode(' ', $p->name)[0]; // Group by first word (create, view, edit, delete)
-        });
+        $permissions = Permission::orderBy('name')->get();
 
         return response()->json([
             'success' => true,

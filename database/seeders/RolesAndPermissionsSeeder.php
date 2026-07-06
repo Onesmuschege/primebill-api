@@ -10,73 +10,402 @@ class RolesAndPermissionsSeeder extends Seeder
 {
     public function run(): void
     {
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[\Spatie\Permission\PermissionRegistrar::class]
+            ->forgetCachedPermissions();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Permissions
+        |--------------------------------------------------------------------------
+        */
 
         $permissions = [
-            'view clients', 'create clients', 'edit clients', 'delete clients',
-            'suspend clients', 'activate clients',
-            'view plans', 'create plans', 'edit plans', 'delete plans',
-            'view invoices', 'create invoices', 'edit invoices', 'delete invoices',
-            'view payments', 'create payments', 'delete payments',
-            'view tickets', 'create tickets', 'edit tickets', 'delete tickets',
-            'assign tickets', 'close tickets',
-            'view routers', 'create routers', 'edit routers', 'delete routers',
-            'view radius', 'sync radius',
-            'view sms', 'send sms',
-            'view reports', 'export reports',
-            'view finance', 'create expenditure', 'view commissions',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Clients
+            |--------------------------------------------------------------------------
+            */
+            'view clients',
+            'create clients',
+            'edit clients',
+            'delete clients',
+            'suspend clients',
+            'activate clients',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Plans
+            |--------------------------------------------------------------------------
+            */
+            'view plans',
+            'create plans',
+            'edit plans',
+            'delete plans',
+
+            /*
+            |--------------------------------------------------------------------------
+            | FUP
+            |--------------------------------------------------------------------------
+            */
+            'view fup',
+            'edit fup',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Analytics
+            |--------------------------------------------------------------------------
+            */
+            'view analytics',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Loyalty
+            |--------------------------------------------------------------------------
+            */
+            'view loyalty',
+            'manage loyalty',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Vouchers
+            |--------------------------------------------------------------------------
+            */
+            'view vouchers',
+            'create vouchers',
+            'edit vouchers',
+            'delete vouchers',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Invoices
+            |--------------------------------------------------------------------------
+            */
+            'view invoices',
+            'create invoices',
+            'edit invoices',
+            'delete invoices',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Payments
+            |--------------------------------------------------------------------------
+            */
+            'view payments',
+            'create payments',
+            'delete payments',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Tickets
+            |--------------------------------------------------------------------------
+            */
+            'view tickets',
+            'create tickets',
+            'edit tickets',
+            'delete tickets',
+            'assign tickets',
+            'close tickets',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Routers
+            |--------------------------------------------------------------------------
+            */
+            'view routers',
+            'create routers',
+            'edit routers',
+            'delete routers',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Radius
+            |--------------------------------------------------------------------------
+            */
+            'view radius',
+            'sync radius',
+
+            /*
+            |--------------------------------------------------------------------------
+            | SMS
+            |--------------------------------------------------------------------------
+            */
+            'view sms',
+            'send sms',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Reports
+            |--------------------------------------------------------------------------
+            */
+            'view reports',
+            'export reports',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Finance
+            |--------------------------------------------------------------------------
+            */
+            'view finance',
+            'create expenditure',
+            'view commissions',
             'approve commissions',
-            'view inventory', 'create inventory', 'edit inventory',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Inventory
+            |--------------------------------------------------------------------------
+            */
+            'view inventory',
+            'create inventory',
+            'edit inventory',
             'delete inventory',
-            'view settings', 'edit settings',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Administration - Users
+            |--------------------------------------------------------------------------
+            */
+            'view users',
+            'create users',
+            'edit users',
+            'delete users',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Administration - Roles
+            |--------------------------------------------------------------------------
+            */
+            'view roles',
+            'create roles',
+            'edit roles',
+            'delete roles',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Settings
+            |--------------------------------------------------------------------------
+            */
+            'view settings',
+            'edit settings',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Logs
+            |--------------------------------------------------------------------------
+            */
             'view logs',
-            'view users', 'create users', 'edit users', 'delete users',
         ];
 
+        /*
+        |--------------------------------------------------------------------------
+        | Create Permissions
+        |--------------------------------------------------------------------------
+        */
+
         foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+            Permission::firstOrCreate([
+                'name' => $permission,
+                'guard_name' => 'web',
+            ]);
         }
 
-        $superAdmin = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
-        $superAdmin->givePermissionTo(Permission::all());
+        /*
+        |--------------------------------------------------------------------------
+        | Super Admin
+        |--------------------------------------------------------------------------
+        */
 
-        $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        $admin->givePermissionTo([
-            'view clients', 'create clients', 'edit clients',
-            'suspend clients', 'activate clients',
-            'view plans', 'create plans', 'edit plans',
-            'view invoices', 'create invoices', 'edit invoices',
-            'view payments', 'create payments',
-            'view tickets', 'create tickets', 'edit tickets',
-            'assign tickets', 'close tickets',
-            'view routers', 'view radius', 'sync radius',
-            'view sms', 'send sms',
-            'view reports', 'export reports',
-            'view finance', 'create expenditure',
-            'view commissions', 'approve commissions',
-            'view inventory', 'create inventory', 'edit inventory',
-            'view settings', 'view logs',
+        $superAdmin = Role::firstOrCreate([
+            'name' => 'super_admin',
+            'guard_name' => 'web',
         ]);
 
-        $staff = Role::firstOrCreate(['name' => 'staff', 'guard_name' => 'web']);
-        $staff->givePermissionTo([
-            'view clients', 'create clients', 'edit clients',
-            'suspend clients', 'activate clients',
+        $superAdmin->syncPermissions(Permission::all());
+
+        /*
+        |--------------------------------------------------------------------------
+        | Admin
+        |--------------------------------------------------------------------------
+        */
+
+        $admin = Role::firstOrCreate([
+            'name' => 'admin',
+            'guard_name' => 'web',
+        ]);
+
+        $admin->syncPermissions([
+
+            // Clients
+            'view clients',
+            'create clients',
+            'edit clients',
+            'delete clients',
+            'suspend clients',
+            'activate clients',
+
+            // Plans
             'view plans',
-            'view invoices', 'create invoices',
-            'view payments', 'create payments',
-            'view tickets', 'create tickets', 'edit tickets',
+            'create plans',
+            'edit plans',
+            'delete plans',
+
+            // FUP
+            'view fup',
+            'edit fup',
+
+            // Analytics
+            'view analytics',
+
+            // Loyalty
+            'view loyalty',
+            'manage loyalty',
+
+            // Vouchers
+            'view vouchers',
+            'create vouchers',
+            'edit vouchers',
+            'delete vouchers',
+
+            // Billing
+            'view invoices',
+            'create invoices',
+            'edit invoices',
+            'delete invoices',
+
+            'view payments',
+            'create payments',
+            'delete payments',
+
+            // Tickets
+            'view tickets',
+            'create tickets',
+            'edit tickets',
+            'delete tickets',
+            'assign tickets',
             'close tickets',
-            'view sms', 'send sms',
+
+            // Routers
+            'view routers',
+            'create routers',
+            'edit routers',
+            'delete routers',
+
+            // Radius
+            'view radius',
+            'sync radius',
+
+            // SMS
+            'view sms',
+            'send sms',
+
+            // Reports
             'view reports',
+            'export reports',
+
+            // Finance
+            'view finance',
+            'create expenditure',
+            'view commissions',
+            'approve commissions',
+
+            // Inventory
+            'view inventory',
+            'create inventory',
+            'edit inventory',
+            'delete inventory',
+
+            // Administration
+            'view users',
+            'create users',
+            'edit users',
+            'delete users',
+
+            'view roles',
+            'create roles',
+            'edit roles',
+            'delete roles',
+
+            // Settings
+            'view settings',
+            'edit settings',
+
+            // Logs
+            'view logs',
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Staff
+        |--------------------------------------------------------------------------
+        */
+
+        $staff = Role::firstOrCreate([
+            'name' => 'staff',
+            'guard_name' => 'web',
+        ]);
+
+        $staff->syncPermissions([
+
+            // Clients
+            'view clients',
+            'create clients',
+            'edit clients',
+            'suspend clients',
+            'activate clients',
+
+            // Plans
+            'view plans',
+
+            // FUP
+            'view fup',
+
+            // Vouchers
+            'view vouchers',
+
+            // Billing
+            'view invoices',
+            'create invoices',
+
+            'view payments',
+            'create payments',
+
+            // Tickets
+            'view tickets',
+            'create tickets',
+            'edit tickets',
+            'close tickets',
+
+            // SMS
+            'view sms',
+            'send sms',
+
+            // Reports
+            'view reports',
+
+            // Inventory
             'view inventory',
         ]);
 
-        $client = Role::firstOrCreate(['name' => 'client', 'guard_name' => 'web']);
-        $client->givePermissionTo([
+        /*
+        |--------------------------------------------------------------------------
+        | Client
+        |--------------------------------------------------------------------------
+        */
+
+        $client = Role::firstOrCreate([
+            'name' => 'client',
+            'guard_name' => 'web',
+        ]);
+
+        $client->syncPermissions([
+
             'view invoices',
+
             'view payments',
-            'view tickets', 'create tickets',
+
+            'view tickets',
+            'create tickets',
         ]);
     }
 }
