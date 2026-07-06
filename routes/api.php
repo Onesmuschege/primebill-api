@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\MpesaController;
 use App\Http\Controllers\Api\SmsController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ExpenditureController;
 use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\InventoryController;
@@ -209,7 +210,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Analytics
     Route::prefix('analytics')->group(function () {
-        Route::get('/income', [DashboardController::class, 'incomeAnalytics']);
+        Route::get('/income', [AnalyticsController::class, 'income']);
+        Route::get('/summary', [AnalyticsController::class, 'summary']);
     });
 
     // Expenditures
