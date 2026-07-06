@@ -42,7 +42,7 @@ class AnalyticsService
         }
 
         $payments = Payment::selectRaw("
-                DATE_FORMAT(created_at,'%Y-%m') as ym,
+                TO_CHAR(created_at, 'YYYY-MM') as ym,
                 SUM(amount) as total
             ")
             ->where('status', 'completed')
@@ -85,7 +85,7 @@ class AnalyticsService
         }
 
         $clients = Client::selectRaw("
-                DATE_FORMAT(created_at,'%Y-%m') as ym,
+                TO_CHAR(created_at, 'YYYY-MM') as ym,
                 COUNT(*) as total
             ")
             ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
