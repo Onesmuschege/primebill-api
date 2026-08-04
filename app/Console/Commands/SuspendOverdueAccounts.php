@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\ActivateNetworkAccessJob;
 use App\Jobs\SuspendNetworkAccessJob;
 use App\Models\Invoice;
+use App\Services\Communication\EmailService;
 use App\Services\Sms\SmsService;
 use Illuminate\Console\Command;
 
@@ -13,7 +14,7 @@ class SuspendOverdueAccounts extends Command
     protected $signature   = 'billing:suspend-overdue';
     protected $description = 'Suspend accounts with overdue invoices';
 
-    public function handle(SmsService $smsService): void
+    public function handle(SmsService $smsService, EmailService $emailService): void
     {
         $overdueInvoices = Invoice::where('status', 'overdue')
                                   ->where('due_date', '<', now()->subDays(3))
@@ -36,6 +37,8 @@ class SuspendOverdueAccounts extends Command
                 "Dear {$invoice->client->first_name}, your account has been suspended due to overdue invoice of KES {$invoice->total}. Pay to reactivate.",
                 $invoice->client_id
             );
+
+            $emailService->accountSuspendedEmail($invoice->client);
 
             $count++;
         }

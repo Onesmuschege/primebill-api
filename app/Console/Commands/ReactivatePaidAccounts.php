@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\ActivateNetworkAccessJob;
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Services\Communication\EmailService;
 use Illuminate\Console\Command;
 
 class ReactivatePaidAccounts extends Command
@@ -12,7 +13,7 @@ class ReactivatePaidAccounts extends Command
     protected $signature = 'billing:reactivate-paid';
     protected $description = 'Reactivate suspended accounts for clients with no overdue invoices';
 
-    public function handle(): void
+    public function handle(EmailService $emailService): void
     {
         $clients = Client::where('status', 'suspended')
             ->with('accounts')
@@ -35,6 +36,7 @@ class ReactivatePaidAccounts extends Command
             }
 
             $client->update(['status' => 'active']);
+            $emailService->accountActivatedEmail($client);
             $reactivated++;
         }
 
