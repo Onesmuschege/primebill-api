@@ -7,6 +7,8 @@ use App\Http\Requests\Invoice\StoreInvoiceRequest;
 use App\Http\Requests\Invoice\UpdateInvoiceRequest;
 use App\Models\Invoice;
 use App\Services\Billing\InvoiceService;
+use App\Services\Settings\SettingsService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
@@ -100,5 +102,22 @@ class InvoiceController extends Controller
             'message' => "{$count} invoices generated successfully",
             'data'    => ['count' => $count],
         ]);
+    }
+
+    // GET /api/invoices/{id}/pdf
+    public function pdf(Invoice $invoice, SettingsService $settingsService)
+    {
+        $invoice->load('client');
+        $company = $settingsService->getGroup('company');
+
+        $pdf = Pdf::loadView('pdf.invoice', [
+            'invoice'         => $invoice,
+            'companyName'     => $company['company_name']    ?? 'PrimeBill ISP',
+            'companyPhone'    => $company['company_phone']   ?? '',
+            'companyEmail'    => $company['company_email']   ?? '',
+            'companyPaybill'  => $company['company_paybill'] ?? '',
+        ])->setPaper('a4');
+
+        return $pdf->download("Invoice-{$invoice->invoice_number}.pdf");
     }
 }
