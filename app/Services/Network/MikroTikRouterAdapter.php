@@ -37,10 +37,15 @@ class MikroTikRouterAdapter implements RouterAdapterInterface
 
     public function deleteUser(string $username): bool
     {
-        $router = $this->resolveRouterForUsername($username);
+        $account = $this->resolveAccountForUsername($username);
+        $router  = $this->resolveRouter($account?->plan?->router_id);
 
         if (!$router || !$this->mikrotik->connect($router)) {
             return false;
+        }
+
+        if ($account?->plan?->type === 'hotspot') {
+            return $this->mikrotik->removeHotspotUser($username);
         }
 
         return $this->mikrotik->removePPPoEUser($username);
@@ -48,10 +53,15 @@ class MikroTikRouterAdapter implements RouterAdapterInterface
 
     public function suspendUser(string $username): bool
     {
-        $router = $this->resolveRouterForUsername($username);
+        $account = $this->resolveAccountForUsername($username);
+        $router  = $this->resolveRouter($account?->plan?->router_id);
 
         if (!$router || !$this->mikrotik->connect($router)) {
             return false;
+        }
+
+        if ($account?->plan?->type === 'hotspot') {
+            return $this->mikrotik->disableHotspotUser($username);
         }
 
         return $this->mikrotik->disablePPPoEUser($username);
@@ -59,10 +69,15 @@ class MikroTikRouterAdapter implements RouterAdapterInterface
 
     public function unsuspendUser(string $username): bool
     {
-        $router = $this->resolveRouterForUsername($username);
+        $account = $this->resolveAccountForUsername($username);
+        $router  = $this->resolveRouter($account?->plan?->router_id);
 
         if (!$router || !$this->mikrotik->connect($router)) {
             return false;
+        }
+
+        if ($account?->plan?->type === 'hotspot') {
+            return $this->mikrotik->enableHotspotUser($username);
         }
 
         return $this->mikrotik->enablePPPoEUser($username);
@@ -88,12 +103,10 @@ class MikroTikRouterAdapter implements RouterAdapterInterface
         return Router::where('status', 'online')->first() ?? Router::first();
     }
 
-    protected function resolveRouterForUsername(string $username): ?Router
+    protected function resolveAccountForUsername(string $username): ?\App\Models\ClientAccount
     {
-        $account = \App\Models\ClientAccount::with('plan')
+        return \App\Models\ClientAccount::with('plan')
             ->where('username', $username)
             ->first();
-
-        return $this->resolveRouter($account?->plan?->router_id);
     }
 }
