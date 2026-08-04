@@ -131,4 +131,102 @@ class PlanController extends Controller
             'data'    => $account->load('plan', 'client'),
         ], 201);
     }
+
+    // GET /api/plan-templates
+    // Quick-create presets for the "New Plan from Template" picker on the frontend.
+    // Static for now (no dedicated table) — speeds are in Kbps, fup_limit in MB,
+    // suggested_price in KES, matching the `plans` table's own units exactly so
+    // the frontend can drop these straight into the plan form unconverted.
+    public function templates()
+    {
+        $templates = [
+            // ── Home Fibre (PPPoE) ──────────────────────────────────────────
+            [
+                'id' => 'home-bronze', 'category' => 'Home Fibre', 'name' => 'Home Bronze 5Mbps',
+                'type' => 'pppoe', 'speed_up' => 5120, 'speed_down' => 5120,
+                'burst_up' => 7168, 'burst_down' => 7168,
+                'fup_limit' => null, 'fup_speed_up' => null, 'fup_speed_down' => null,
+                'validity_days' => 30, 'suggested_price' => 1500,
+            ],
+            [
+                'id' => 'home-silver', 'category' => 'Home Fibre', 'name' => 'Home Silver 10Mbps',
+                'type' => 'pppoe', 'speed_up' => 10240, 'speed_down' => 10240,
+                'burst_up' => 15360, 'burst_down' => 15360,
+                'fup_limit' => null, 'fup_speed_up' => null, 'fup_speed_down' => null,
+                'validity_days' => 30, 'suggested_price' => 2500,
+            ],
+            [
+                'id' => 'home-gold', 'category' => 'Home Fibre', 'name' => 'Home Gold 20Mbps',
+                'type' => 'pppoe', 'speed_up' => 20480, 'speed_down' => 20480,
+                'burst_up' => 30720, 'burst_down' => 30720,
+                'fup_limit' => null, 'fup_speed_up' => null, 'fup_speed_down' => null,
+                'validity_days' => 30, 'suggested_price' => 3500,
+            ],
+            [
+                'id' => 'home-platinum', 'category' => 'Home Fibre', 'name' => 'Home Platinum 40Mbps',
+                'type' => 'pppoe', 'speed_up' => 40960, 'speed_down' => 40960,
+                'burst_up' => 51200, 'burst_down' => 51200,
+                'fup_limit' => null, 'fup_speed_up' => null, 'fup_speed_down' => null,
+                'validity_days' => 30, 'suggested_price' => 5000,
+            ],
+
+            // ── Hotspot (prepaid, short-validity) ───────────────────────────
+            [
+                'id' => 'hotspot-hourly', 'category' => 'Hotspot', 'name' => 'Hotspot 1 Hour',
+                'type' => 'hotspot', 'speed_up' => 3072, 'speed_down' => 3072,
+                'burst_up' => null, 'burst_down' => null,
+                'fup_limit' => 1024, 'fup_speed_up' => 512, 'fup_speed_down' => 512,
+                'validity_days' => 1, 'suggested_price' => 10,
+            ],
+            [
+                'id' => 'hotspot-daily', 'category' => 'Hotspot', 'name' => 'Hotspot Daily',
+                'type' => 'hotspot', 'speed_up' => 5120, 'speed_down' => 5120,
+                'burst_up' => null, 'burst_down' => null,
+                'fup_limit' => 2048, 'fup_speed_up' => 1024, 'fup_speed_down' => 1024,
+                'validity_days' => 1, 'suggested_price' => 50,
+            ],
+            [
+                'id' => 'hotspot-weekly', 'category' => 'Hotspot', 'name' => 'Hotspot Weekly',
+                'type' => 'hotspot', 'speed_up' => 5120, 'speed_down' => 5120,
+                'burst_up' => null, 'burst_down' => null,
+                'fup_limit' => 10240, 'fup_speed_up' => 1024, 'fup_speed_down' => 1024,
+                'validity_days' => 7, 'suggested_price' => 200,
+            ],
+            [
+                'id' => 'hotspot-monthly', 'category' => 'Hotspot', 'name' => 'Hotspot Monthly',
+                'type' => 'hotspot', 'speed_up' => 8192, 'speed_down' => 8192,
+                'burst_up' => null, 'burst_down' => null,
+                'fup_limit' => 51200, 'fup_speed_up' => 2048, 'fup_speed_down' => 2048,
+                'validity_days' => 30, 'suggested_price' => 1000,
+            ],
+
+            // ── Business / Dedicated (static IP, no FUP) ────────────────────
+            [
+                'id' => 'biz-starter', 'category' => 'Business', 'name' => 'Business Starter 10Mbps',
+                'type' => 'static', 'speed_up' => 10240, 'speed_down' => 10240,
+                'burst_up' => null, 'burst_down' => null,
+                'fup_limit' => null, 'fup_speed_up' => null, 'fup_speed_down' => null,
+                'validity_days' => 30, 'suggested_price' => 8000,
+            ],
+            [
+                'id' => 'biz-standard', 'category' => 'Business', 'name' => 'Business Standard 25Mbps',
+                'type' => 'static', 'speed_up' => 25600, 'speed_down' => 25600,
+                'burst_up' => null, 'burst_down' => null,
+                'fup_limit' => null, 'fup_speed_up' => null, 'fup_speed_down' => null,
+                'validity_days' => 30, 'suggested_price' => 15000,
+            ],
+            [
+                'id' => 'biz-enterprise', 'category' => 'Business', 'name' => 'Business Enterprise 50Mbps',
+                'type' => 'static', 'speed_up' => 51200, 'speed_down' => 51200,
+                'burst_up' => null, 'burst_down' => null,
+                'fup_limit' => null, 'fup_speed_up' => null, 'fup_speed_down' => null,
+                'validity_days' => 30, 'suggested_price' => 28000,
+            ],
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data'    => $templates,
+        ]);
+    }
 }
