@@ -2,42 +2,111 @@
 
 namespace App\Services\Network;
 
+use App\Models\Router;
 use Illuminate\Support\Facades\Log;
 
-class MockRouterAdapter implements RouterAdapterInterface
+class MikroTikRouterAdapter implements RouterAdapterInterface
 {
+    public function __construct(
+        protected MikroTikService $mikrotik
+    ) {}
+
     public function createUser(array $data): bool
     {
-        Log::info('MockRouterAdapter:createUser', $data);
+        $router = $this->resolveRouter($data['router_id'] ?? null);
 
-        return true;
+        if (!$router || !$this->mikrotik->connect($router)) {
+            Log::warning('MikroTikRouterAdapter: failed to connect for createUser', $data);
+
+            return false;
+        }
+
+        $username = $data['username'];
+        $password = $data['password'];
+        $profile  = $data['profile'] ?? config('network.default_ppp_profile');
+        $type     = $data['plan_type'] ?? 'pppoe';
+
+        if ($type === 'hotspot') {
+            $profile = $data['profile'] ?? config('network.default_hotspot_profile');
+
+            return $this->mikrotik->addHotspotUser($username, $password, $profile);
+        }
+
+        return $this->mikrotik->addPPPoEUser($username, $password, $profile);
     }
 
     public function deleteUser(string $username): bool
     {
-        Log::info('MockRouterAdapter:deleteUser', ['username' => $username]);
+        $account = $this->resolveAccountForUsername($username);
+        $router  = $this->resolveRouter($account?->plan?->router_id);
 
-        return true;
+        if (!$router || !$this->mikrotik->connect($router)) {
+            return false;
+        }
+
+        if ($account?->plan?->type === 'hotspot') {
+            return $this->mikrotik->removeHotspotUser($username);
+        }
+
+        return $this->mikrotik->removePPPoEUser($username);
     }
 
     public function suspendUser(string $username): bool
     {
-        Log::info('MockRouterAdapter:suspendUser', ['username' => $username]);
+        $account = $this->resolveAccountForUsername($username);
+        $router  = $this->resolveRouter($account?->plan?->router_id);
 
-        return true;
+        if (!$router || !$this->mikrotik->connect($router)) {
+            return false;
+        }
+
+        if ($account?->plan?->type === 'hotspot') {
+            return $this->mikrotik->disableHotspotUser($username);
+        }
+
+        return $this->mikrotik->disablePPPoEUser($username);
     }
 
     public function unsuspendUser(string $username): bool
     {
-        Log::info('MockRouterAdapter:unsuspendUser', ['username' => $username]);
+        $account = $this->resolveAccountForUsername($username);
+        $router  = $this->resolveRouter($account?->plan?->router_id);
 
-        return true;
+        if (!$router || !$this->mikrotik->connect($router)) {
+            return false;
+        }
+
+        if ($account?->plan?->type === 'hotspot') {
+            return $this->mikrotik->enableHotspotUser($username);
+        }
+
+        return $this->mikrotik->enablePPPoEUser($username);
     }
 
     public function testConnection(): bool
     {
-        Log::info('MockRouterAdapter:testConnection');
+        $router = $this->resolveRouter(null);
 
-        return true;
+        if (!$router || !$this->mikrotik->connect($router)) {
+            return false;
+        }
+
+        return $this->mikrotik->testConnection();
+    }
+
+    protected function resolveRouter(?int $routerId): ?Router
+    {
+        if ($routerId) {
+            return Router::find($routerId);
+        }
+
+        return Router::where('status', 'online')->first() ?? Router::first();
+    }
+
+    protected function resolveAccountForUsername(string $username): ?\App\Models\ClientAccount
+    {
+        return \App\Models\ClientAccount::with('plan')
+            ->where('username', $username)
+            ->first();
     }
 }
