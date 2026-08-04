@@ -67,6 +67,7 @@ Route::prefix('portal')->group(function () {
     Route::prefix('captive')->group(function () {
         Route::middleware('throttle:60,1')->group(function () {
             Route::get('/plans',             [CaptivePortalController::class, 'plans']);
+            Route::get('/theme',             [CaptivePortalController::class, 'theme']);
         });
         Route::middleware('throttle:20,1')->group(function () {
             Route::get('/status/{username}', [CaptivePortalController::class, 'status']);
@@ -136,6 +137,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{plan}/assign',[PlanController::class, 'assign'])->middleware('permission:edit clients');
     });
 
+    // Plan templates (quick-create presets for the "New Plan from Template" picker)
+    Route::get('/plan-templates', [PlanController::class, 'templates'])->middleware('permission:view plans');
+
     // RADIUS
     Route::prefix('radius')->middleware('permission:view radius')->group(function () {
         Route::get('/sessions', [RadiusController::class, 'sessions']);
@@ -160,6 +164,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/',             [InvoiceController::class, 'store'])->middleware('permission:create invoices');
         Route::post('/bulk-generate',[InvoiceController::class, 'bulkGenerate'])->middleware('permission:create invoices');
         Route::get('/{invoice}',     [InvoiceController::class, 'show']);
+        Route::get('/{invoice}/pdf', [InvoiceController::class, 'pdf']);
         Route::put('/{invoice}',     [InvoiceController::class, 'update'])->middleware('permission:edit invoices');
         Route::delete('/{invoice}',  [InvoiceController::class, 'destroy'])->middleware('permission:delete invoices');
     });
