@@ -58,8 +58,12 @@ Route::prefix('auth')->group(function () {
     Route::post('/password/reset',  [PasswordResetController::class, 'reset']);
 });
 
-// Client Portal routes
-Route::prefix('portal')->group(function () {
+// Client Portal routes — slug-prefixed so a public, unauthenticated visitor
+// (captive portal, registration, login) can be resolved to the correct
+// tenant before any auth happens. TenantResolver reads {tenant_slug} from
+// the route when there's no logged-in user yet, and switches to reading it
+// from the authenticated user once there is one — see TenantResolver.
+Route::prefix('portal/{tenant_slug}')->middleware('tenant')->group(function () {
     Route::post('/register', [PortalRegisterController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/login',    [PortalAuthController::class, 'login'])->middleware('throttle:10,1');
 
@@ -97,7 +101,7 @@ Route::prefix('portal')->group(function () {
 });
 
 // ─── Protected Admin/Staff routes ─────────────────────────────────────────────
-Route::middleware(['auth:sanctum'])->group(function () {
+Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Auth
     Route::prefix('auth')->group(function () {

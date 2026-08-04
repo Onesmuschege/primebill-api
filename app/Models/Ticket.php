@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToTenant;
 
 class Ticket extends Model
 {
+    use BelongsToTenant;
+
     protected $fillable = [
         'client_id', 'assigned_to', 'subject',
         'description', 'priority', 'status', 'closed_at',

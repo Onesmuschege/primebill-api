@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToTenant;
 
 class TicketReply extends Model
 {
+    use BelongsToTenant;
+
     protected $fillable = [
         'ticket_id', 'user_id', 'message', 'is_internal',
     ];
