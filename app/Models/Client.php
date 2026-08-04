@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 class Client extends Authenticatable
 {
-    use HasApiTokens, HasFactory;
+    use HasApiTokens, HasFactory, BelongsToTenant;
 
     protected $fillable = [
         'first_name', 'last_name', 'email', 'phone',

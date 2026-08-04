@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToTenant;
 
 class LoyaltyPoint extends Model
 {
+    use BelongsToTenant;
+
     protected $fillable = [
         'client_id', 'points', 'type', 'reason',
         'reference_type', 'reference_id', 'expires_at',

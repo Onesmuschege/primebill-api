@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToTenant;
 
 class MpesaTransaction extends Model
 {
+    use BelongsToTenant;
+
     protected $fillable = [
         'client_id',
         'invoice_id',
@@ -40,4 +43,3 @@ class MpesaTransaction extends Model
         return $this->belongsTo(Invoice::class);
     }
 }
-

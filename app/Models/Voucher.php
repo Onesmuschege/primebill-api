@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Support\Str;
 
 class Voucher extends Model
 {
+    use BelongsToTenant;
+
     protected $fillable = [
         'code', 'plan_id', 'created_by', 'redeemed_by',
         'status', 'batch', 'batch_label', 'redeemed_at', 'expires_at',

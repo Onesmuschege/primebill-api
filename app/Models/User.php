@@ -19,6 +19,14 @@ class User extends Authenticatable
         'password',
     ];
 
+    // Deliberately no BelongsToTenant trait here — see the trait's docblock
+    // for why. This is a plain relation only; TenantResolver reads
+    // $user->tenant_id directly once auth:sanctum has resolved the user.
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
     protected $hidden = [
         'password',
         'remember_token',

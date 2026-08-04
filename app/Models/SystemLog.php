@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToTenant;
 
 class SystemLog extends Model
 {
+    use BelongsToTenant;
+
     protected $fillable = [
         'user_id', 'action', 'model', 'model_id',
         'old_values', 'new_values', 'ip_address', 'user_agent',
