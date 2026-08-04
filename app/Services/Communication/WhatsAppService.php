@@ -14,8 +14,8 @@ class WhatsAppService
      */
     public function send(string $phone, string $message, ?int $clientId = null): bool
     {
-        $apiKey   = config('services.africastalking.api_key');
-        $username = config('services.africastalking.username', 'sandbox');
+        $apiKey   = config('sms.africas_talking.api_key');
+        $username = config('sms.africas_talking.username', 'sandbox');
         $phone    = $this->formatPhone($phone);
 
         try {
