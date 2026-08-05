@@ -34,9 +34,19 @@ class MockRadiusAdapter implements RadiusAdapterInterface
         return true;
     }
 
-    public function syncUsers(): bool
+public function syncUsers(): bool
     {
         Log::info('MockRadiusAdapter:syncUsers');
+
+        return true;
+    }
+
+    public function syncUsersToAccount(\App\Models\ClientAccount $account): bool
+    {
+        Log::info('MockRadiusAdapter:syncUsersToAccount', [
+            'username' => $account->username,
+            'plan'     => $account->plan?->name,
+        ]);
 
         return true;
     }

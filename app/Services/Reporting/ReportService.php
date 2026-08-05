@@ -16,22 +16,42 @@ class ReportService
 {
     public function getIncomeReport(string $from, string $to): array
     {
+        // Aggregate in SQL instead of loading all payments into PHP memory.
+        $totals = Payment::whereBetween('created_at', [$from, $to])
+                         ->where('status', 'completed')
+                         ->selectRaw('SUM(amount) as total')
+                         ->selectRaw('COUNT(*) as count')
+                         ->selectRaw("SUM(CASE WHEN method = 'mpesa' THEN amount ELSE 0 END) as mpesa")
+                         ->selectRaw("SUM(CASE WHEN method = 'cash' THEN amount ELSE 0 END) as cash")
+                         ->selectRaw("SUM(CASE WHEN method = 'bank' THEN amount ELSE 0 END) as bank")
+                         ->first();
+
+        $daily = Payment::whereBetween('created_at', [$from, $to])
+                        ->where('status', 'completed')
+                        ->selectRaw("DATE_FORMAT(created_at, '%Y-%m-%d') as day")
+                        ->selectRaw('SUM(amount) as total')
+                        ->groupByRaw("DATE_FORMAT(created_at, '%Y-%m-%d')")
+                        ->orderByRaw("DATE_FORMAT(created_at, '%Y-%m-%d')")
+                        ->pluck('total', 'day')
+                        ->toArray();
+
+        // Keep the last N payments for the detail table (paginated by caller if needed).
         $payments = Payment::whereBetween('created_at', [$from, $to])
                            ->where('status', 'completed')
                            ->with('client')
+                           ->orderByDesc('created_at')
+                           ->limit(500)
                            ->get();
 
         return [
-            'total'       => $payments->sum('amount'),
-            'count'       => $payments->count(),
+            'total'       => (float) ($totals->total ?? 0),
+            'count'       => (int) ($totals->count ?? 0),
             'by_method'   => [
-                'mpesa' => $payments->where('method', 'mpesa')->sum('amount'),
-                'cash'  => $payments->where('method', 'cash')->sum('amount'),
-                'bank'  => $payments->where('method', 'bank')->sum('amount'),
+                'mpesa' => (float) ($totals->mpesa ?? 0),
+                'cash'  => (float) ($totals->cash ?? 0),
+                'bank'  => (float) ($totals->bank ?? 0),
             ],
-            'daily'       => $payments->groupBy(fn($p) => $p->created_at->format('Y-m-d'))
-                                      ->map(fn($g) => $g->sum('amount'))
-                                      ->toArray(),
+            'daily'       => $daily,
             'payments'    => $payments,
         ];
     }
@@ -55,51 +75,76 @@ class ReportService
         ];
     }
 
-    public function getInvoiceReport(string $from, string $to): array
+public function getInvoiceReport(string $from, string $to): array
     {
-        $invoices = Invoice::whereBetween('created_at', [$from, $to])->get();
+        $aggs = Invoice::whereBetween('created_at', [$from, $to])
+                       ->selectRaw('COUNT(*) as total')
+                       ->selectRaw("COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid")
+                       ->selectRaw("COUNT(CASE WHEN status = 'unpaid' THEN 1 END) as unpaid")
+                       ->selectRaw("COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue")
+                       ->selectRaw("COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled")
+                       ->selectRaw('SUM(total) as total_value')
+                       ->selectRaw("SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END) as collected")
+                       ->selectRaw("SUM(CASE WHEN status IN ('unpaid','overdue') THEN total ELSE 0 END) as outstanding")
+                       ->first();
 
         return [
-            'total'     => $invoices->count(),
-            'paid'      => $invoices->where('status', 'paid')->count(),
-            'unpaid'    => $invoices->where('status', 'unpaid')->count(),
-            'overdue'   => $invoices->where('status', 'overdue')->count(),
-            'cancelled' => $invoices->where('status', 'cancelled')->count(),
-            'total_value'    => $invoices->sum('total'),
-            'collected'      => $invoices->where('status', 'paid')->sum('total'),
-            'outstanding'    => $invoices->whereIn('status', ['unpaid', 'overdue'])->sum('total'),
+            'total'       => (int) ($aggs->total ?? 0),
+            'paid'        => (int) ($aggs->paid ?? 0),
+            'unpaid'      => (int) ($aggs->unpaid ?? 0),
+            'overdue'     => (int) ($aggs->overdue ?? 0),
+            'cancelled'   => (int) ($aggs->cancelled ?? 0),
+            'total_value' => (float) ($aggs->total_value ?? 0),
+            'collected'   => (float) ($aggs->collected ?? 0),
+            'outstanding' => (float) ($aggs->outstanding ?? 0),
         ];
     }
 
     public function getSmsReport(string $from, string $to): array
     {
-        $logs = SmsLog::whereBetween('created_at', [$from, $to])->get();
+        $aggs = SmsLog::whereBetween('created_at', [$from, $to])
+                      ->selectRaw('COUNT(*) as total')
+                      ->selectRaw("COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent")
+                      ->selectRaw("COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed")
+                      ->selectRaw("COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered")
+                      ->first();
+
+        $byGateway = SmsLog::whereBetween('created_at', [$from, $to])
+                           ->selectRaw('gateway, COUNT(*) as count')
+                           ->groupBy('gateway')
+                           ->pluck('count', 'gateway')
+                           ->toArray();
 
         return [
-            'total'     => $logs->count(),
-            'sent'      => $logs->where('status', 'sent')->count(),
-            'failed'    => $logs->where('status', 'failed')->count(),
-            'delivered' => $logs->where('status', 'delivered')->count(),
-            'by_gateway'=> $logs->groupBy('gateway')
-                                ->map(fn($g) => $g->count())
-                                ->toArray(),
+            'total'      => (int) ($aggs->total ?? 0),
+            'sent'       => (int) ($aggs->sent ?? 0),
+            'failed'     => (int) ($aggs->failed ?? 0),
+            'delivered'  => (int) ($aggs->delivered ?? 0),
+            'by_gateway' => $byGateway,
         ];
     }
 
     public function getNetworkReport(string $from, string $to): array
     {
-        $sessions = RadiusSession::whereBetween('created_at', [$from, $to])->get();
+        $aggs = RadiusSession::whereBetween('created_at', [$from, $to])
+                             ->selectRaw('COUNT(*) as total_sessions')
+                             ->selectRaw('COALESCE(SUM(bytes_out), 0) as total_download')
+                             ->selectRaw('COALESCE(SUM(bytes_in), 0) as total_upload')
+                             ->first();
+
+        $top = RadiusSession::whereBetween('created_at', [$from, $to])
+                            ->orderByDesc('bytes_out')
+                            ->limit(10)
+                            ->get(['id', 'username', 'bytes_out']);
 
         return [
-            'total_sessions'  => $sessions->count(),
-            'total_download'  => round($sessions->sum('bytes_out') / 1073741824, 2) . ' GB',
-            'total_upload'    => round($sessions->sum('bytes_in') / 1073741824, 2) . ' GB',
-            'top_downloaders' => $sessions->sortByDesc('bytes_out')
-                                          ->take(10)
-                                          ->map(fn($s) => [
-                                              'username'   => $s->username,
-                                              'downloaded' => round($s->bytes_out / 1073741824, 2) . ' GB',
-                                          ])->values()->toArray(),
+            'total_sessions'  => (int) ($aggs->total_sessions ?? 0),
+            'total_download'  => round(((float) ($aggs->total_download ?? 0)) / 1073741824, 2) . ' GB',
+            'total_upload'    => round(((float) ($aggs->total_upload ?? 0)) / 1073741824, 2) . ' GB',
+            'top_downloaders' => $top->map(fn($s) => [
+                'username'   => $s->username,
+                'downloaded' => round($s->bytes_out / 1073741824, 2) . ' GB',
+            ])->values()->toArray(),
         ];
     }
 

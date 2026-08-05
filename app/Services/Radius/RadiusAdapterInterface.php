@@ -13,4 +13,6 @@ interface RadiusAdapterInterface
     public function unsuspendUser(string $username): bool;
 
     public function syncUsers(): bool;
+
+    public function syncUsersToAccount(\App\Models\ClientAccount $account): bool;
 }

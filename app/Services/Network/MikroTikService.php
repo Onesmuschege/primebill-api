@@ -62,6 +62,42 @@ class MikroTikService
         }
     }
 
+    /**
+     * Return traffic counters for every configured interface on the router.
+     *
+     * @return array<int, array{name: string, 'rx-byte': int, 'tx-byte': int, 'rx-packet': int, 'tx-packet': int}>
+     */
+    public function getAllInterfacesTraffic(): array
+    {
+        try {
+            $query    = new Query('/interface/print');
+            $response = $this->client->query($query)->read();
+
+            if (!is_array($response)) {
+                return [];
+            }
+
+            $result = [];
+            foreach ($response as $iface) {
+                if (!is_array($iface) || empty($iface['name'])) {
+                    continue;
+                }
+
+                $result[] = [
+                    'name'       => (string) $iface['name'],
+                    'rx-byte'    => (int) ($iface['rx-byte'] ?? 0),
+                    'tx-byte'    => (int) ($iface['tx-byte'] ?? 0),
+                    'rx-packet'  => (int) ($iface['rx-packet'] ?? 0),
+                    'tx-packet'  => (int) ($iface['tx-packet'] ?? 0),
+                ];
+            }
+
+            return $result;
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
     public function addPPPoEUser(string $username, string $password, string $profile = 'default'): bool
     {
         try {

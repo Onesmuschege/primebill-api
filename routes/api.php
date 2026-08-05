@@ -38,6 +38,13 @@ use App\Http\Controllers\Api\LoyaltyController;
 use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\RadiusSettingsController;
 use App\Http\Controllers\Api\TicketEscalateController;
+use App\Http\Controllers\Api\TenantRegistrationController;
+
+// ─── ISP self-registration (this is how a new tenant signs up for PrimeBill itself) ──
+Route::prefix('tenants')->group(function () {
+    Route::post('/register',   [TenantRegistrationController::class, 'register'])->middleware('throttle:5,1');
+    Route::get('/check-slug',  [TenantRegistrationController::class, 'checkSlug'])->middleware('throttle:30,1');
+});
 
 // RADIUS accounting webhook (no auth)
 Route::post('/webhooks/radius/accounting', [RadiusAccountingController::class, 'accounting']);

@@ -93,6 +93,27 @@ class FreeRadiusAdapter implements RadiusAdapterInterface
         return true;
     }
 
+    /**
+     * Create or update a single RADIUS user record from a client account.
+     */
+    public function syncUsersToAccount(\App\Models\ClientAccount $account): bool
+    {
+        if (!$account->plan) {
+            return false;
+        }
+
+        if (!$this->tablesExist()) {
+            return false;
+        }
+
+        return $this->createUser([
+            'username'   => $account->username,
+            'password'   => $account->password,
+            'group'      => $account->plan->name,
+            'rate_limit' => $this->buildRateLimit($account->plan),
+        ]);
+    }
+
     public function suspendUser(string $username): bool
     {
         if (!$this->tablesExist()) {

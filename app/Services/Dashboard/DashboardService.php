@@ -9,42 +9,63 @@ use App\Models\Payment;
 use App\Models\Ticket;
 use App\Models\Router;
 use App\Models\SmsLog;
+use App\Models\Tenant;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
+    /**
+     * Per-tenant dashboard stats cache TTL (seconds).
+     */
+    private const CACHE_TTL = 600; // 10 minutes
+
     public function getStats(): array
     {
-        $today = now()->toDateString();
+        $tenantId = Tenant::current()?->id ?? 'global';
 
-        return [
-            'income_today'    => $this->getIncomeToday($today),
-            'income_month'    => $this->getIncomeThisMonth(),
-            'active_users'    => $this->getActiveUsers(),
-            'total_users'     => $this->safe(fn() => Client::count(), 0),
-            'tickets'         => $this->getTicketStats(),
-            'account_status'  => $this->getAccountStatus(),
-            'hotspot_status'  => $this->getHotspotStatus(),
-            'sms_stats'       => $this->getSmsStats($today),
+        return Cache::remember("dashboard:stats:{$tenantId}", self::CACHE_TTL, function () {
+            $today = now()->toDateString();
 
-            'overdue_invoices' => [
-                'count'  => $this->safe(fn() => Invoice::where('status', 'overdue')->count(), 0),
-                'amount' => $this->safe(fn() => Invoice::where('status', 'overdue')->sum('amount'), 0),
-            ],
+            return [
+                'income_today'    => $this->getIncomeToday($today),
+                'income_month'    => $this->getIncomeThisMonth(),
+                'active_users'    => $this->getActiveUsers(),
+                'total_users'     => $this->safe(fn() => Client::count(), 0),
+                'tickets'         => $this->getTicketStats(),
+                'account_status'  => $this->getAccountStatus(),
+                'hotspot_status'  => $this->getHotspotStatus(),
+                'sms_stats'       => $this->getSmsStats($today),
 
-            'routers' => [
-                'total'   => $this->safe(fn() => Router::count(), 0),
-                'online'  => $this->safe(fn() => Router::where('status', 'online')->count(), 0),
-                'offline' => $this->safe(fn() => Router::where('status', 'offline')->count(), 0),
-            ],
+                'overdue_invoices' => [
+                    'count'  => $this->safe(fn() => Invoice::where('status', 'overdue')->count(), 0),
+                    'amount' => $this->safe(fn() => Invoice::where('status', 'overdue')->sum('amount'), 0),
+                ],
 
-            'account_summary' => [
-                'online'    => $this->safe(fn() => ClientAccount::where('status', 'active')->count(), 0),
-                'offline'   => $this->safe(fn() => ClientAccount::where('status', 'inactive')->count(), 0),
-                'overdue'   => $this->safe(fn() => ClientAccount::where('status', 'overdue')->count(), 0),
-                'suspended' => $this->safe(fn() => ClientAccount::where('status', 'suspended')->count(), 0),
-            ],
-        ];
+                'routers' => [
+                    'total'   => $this->safe(fn() => Router::count(), 0),
+                    'online'  => $this->safe(fn() => Router::where('status', 'online')->count(), 0),
+                    'offline' => $this->safe(fn() => Router::where('status', 'offline')->count(), 0),
+                ],
+
+                'account_summary' => [
+                    'online'    => $this->safe(fn() => ClientAccount::where('status', 'active')->count(), 0),
+                    'offline'   => $this->safe(fn() => ClientAccount::where('status', 'inactive')->count(), 0),
+                    'overdue'   => $this->safe(fn() => ClientAccount::where('status', 'overdue')->count(), 0),
+                    'suspended' => $this->safe(fn() => ClientAccount::where('status', 'suspended')->count(), 0),
+                ],
+            ];
+        });
+    }
+
+    /**
+     * Invalidate the cached dashboard stats for the current tenant.
+     * Call this after any payment, invoice, client, or account mutation.
+     */
+    public static function invalidateStats(): void
+    {
+        $tenantId = Tenant::current()?->id ?? 'global';
+        Cache::forget("dashboard:stats:{$tenantId}");
     }
 
     private function getIncomeToday(string $today): array
@@ -174,26 +195,34 @@ class DashboardService
         }
     }
 
-    public function getIncomeAnalytics(string $from, string $to, string $groupBy = 'day'): array
+public function getIncomeAnalytics(string $from, string $to, string $groupBy = 'day'): array
     {
         return $this->safe(function () use ($from, $to, $groupBy) {
-            $payments = Payment::whereBetween('created_at', [$from, $to])
-                               ->where('status', 'completed')
-                               ->get();
-
-            $grouped = match ($groupBy) {
-                'month' => $payments->groupBy(fn($p) => $p->created_at->format('Y-m')),
-                'year'  => $payments->groupBy(fn($p) => $p->created_at->format('Y')),
-                default => $payments->groupBy(fn($p) => $p->created_at->format('Y-m-d')),
+            // Use SQL aggregation instead of loading all payments into PHP memory.
+            $raw = match ($groupBy) {
+                'month' => "DATE_FORMAT(created_at, '%Y-%m')",
+                'year'  => "DATE_FORMAT(created_at, '%Y')",
+                default => "DATE_FORMAT(created_at, '%Y-%m-%d')",
             };
 
-            return $grouped->map(fn($group, $key) => [
-                'date'  => $key,
-                'total' => $group->sum('amount'),
-                'count' => $group->count(),
-                'mpesa' => $group->where('method', 'mpesa')->sum('amount'),
-                'cash'  => $group->where('method', 'cash')->sum('amount'),
-            ])->values()->toArray();
+            $rows = Payment::whereBetween('created_at', [$from, $to])
+                           ->where('status', 'completed')
+                           ->selectRaw("{$raw} as period")
+                           ->selectRaw('SUM(amount) as total')
+                           ->selectRaw('COUNT(*) as count')
+                           ->selectRaw("SUM(CASE WHEN method = 'mpesa' THEN amount ELSE 0 END) as mpesa")
+                           ->selectRaw("SUM(CASE WHEN method = 'cash' THEN amount ELSE 0 END) as cash")
+                           ->groupByRaw($raw)
+                           ->orderByRaw($raw)
+                           ->get();
+
+            return $rows->map(fn($row) => [
+                'date'  => $row->period,
+                'total' => (float) $row->total,
+                'count' => (int) $row->count,
+                'mpesa' => (float) $row->mpesa,
+                'cash'  => (float) $row->cash,
+            ])->toArray();
         }, []);
     }
 
