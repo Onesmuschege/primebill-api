@@ -43,6 +43,11 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'roles' => $user->getRoleNames(),
                 'permissions' => $user->getAllPermissions()->pluck('name'),
+                // Cross-tenant PrimeBill-operator flag — separate from
+                // roles/permissions, which are always tenant-scoped. The
+                // frontend uses this alone to decide whether to show the
+                // platform-admin dashboard route.
+                'is_platform_admin' => (bool) $user->is_platform_admin,
             ],
             'token' => $token,
         ], 'Login successful');
@@ -58,6 +63,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),
+            'is_platform_admin' => (bool) $user->is_platform_admin,
         ]);
     }
 
