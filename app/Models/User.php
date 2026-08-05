@@ -17,6 +17,11 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        // Deliberately NOT mass-assignable in the sense of being settable
+        // from a request — no controller should ever pull this from
+        // $request->all(). It's listed here only so the platform:make-admin
+        // command and factories can set it directly via create()/update().
+        'is_platform_admin',
     ];
 
     // Deliberately no BelongsToTenant trait here — see the trait's docblock
@@ -37,6 +42,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_platform_admin' => 'boolean',
         ];
     }
 }

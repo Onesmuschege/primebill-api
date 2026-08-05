@@ -27,6 +27,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'mpesa.callback' => \App\Http\Middleware\ValidateMpesaCallback::class,
             'tenant' => \App\Http\Middleware\ResolveTenant::class,
+            // Gates /api/platform/* — cross-tenant PrimeBill-operator routes.
+            // Deliberately separate from 'role'/'permission': those check
+            // Spatie roles WITHIN a tenant, this checks the is_platform_admin
+            // column, which sits outside tenant scoping entirely.
+            'platform_admin' => \App\Http\Middleware\EnsurePlatformAdmin::class,
         ]);
 
     })

@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\RadiusSettingsController;
 use App\Http\Controllers\Api\TicketEscalateController;
 use App\Http\Controllers\Api\TenantRegistrationController;
+use App\Http\Controllers\Api\PlatformAdminController;
 
 // ─── ISP self-registration (this is how a new tenant signs up for PrimeBill itself) ──
 Route::prefix('tenants')->group(function () {
@@ -340,4 +341,17 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/stats',  [ReferralController::class, 'stats']);
     });
 
+});
+
+// ─── Platform-admin routes (PrimeBill's own cross-tenant operator view) ──────
+// Deliberately its own top-level group — NOT nested inside the block above,
+// since that block carries the 'tenant' middleware and these routes must
+// NOT resolve or scope to any single tenant. Gated by 'platform_admin'
+// (EnsurePlatformAdmin), which checks users.is_platform_admin directly.
+Route::prefix('platform')->middleware(['auth:sanctum', 'platform_admin'])->group(function () {
+    Route::get('/stats',                  [PlatformAdminController::class, 'stats']);
+    Route::get('/tenants',                [PlatformAdminController::class, 'tenants']);
+    Route::get('/tenants/{tenant}',       [PlatformAdminController::class, 'showTenant']);
+    Route::post('/tenants/{tenant}/suspend', [PlatformAdminController::class, 'suspend']);
+    Route::post('/tenants/{tenant}/activate', [PlatformAdminController::class, 'activate']);
 });
