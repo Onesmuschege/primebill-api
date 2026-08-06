@@ -52,7 +52,7 @@ class CustomerSubscriptionService
             'activated_at' => now(),
         ]);
 
-        $this->notificationService->sendTrialStartedNotification(
+        $this->notificationService->sendCustomerSubscriptionTrialStarted(
             $subscription->client,
             $subscription
         );
@@ -110,7 +110,7 @@ class CustomerSubscriptionService
             ]),
         ]);
 
-        $this->notificationService->sendSubscriptionCancelledNotification(
+        $this->notificationService->sendCustomerSubscriptionCancelled(
             $subscription->client,
             $subscription
         );
@@ -177,7 +177,7 @@ class CustomerSubscriptionService
             ]),
         ]);
 
-        $this->notificationService->sendSubscriptionReminder(
+        $this->notificationService->sendCustomerSubscriptionReminder(
             $subscription->client,
             $subscription,
             0
