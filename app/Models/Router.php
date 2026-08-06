@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Concerns\BelongsToTenant;
 
 class Router extends Model
 {
-    use BelongsToTenant;
+    use HasFactory, BelongsToTenant;
 
     protected $fillable = [
         'name', 'ip_address', 'username', 'password',
