@@ -47,4 +47,40 @@ class Client extends Authenticatable
     {
         return $this->first_name . ' ' . $this->last_name;
     }
+
+    /**
+     * CRM — contacts, addresses, documents, timeline for this client
+     */
+    public function contacts()
+    {
+        return $this->hasMany(Contact::class);
+    }
+
+    public function addresses()
+    {
+        return $this->morphMany(Address::class, 'addressable');
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(ClientDocument::class);
+    }
+
+    public function timeline()
+    {
+        return $this->hasMany(ClientTimeline::class)->orderBy('occurred_at', 'desc');
+    }
+
+    /**
+     * Funnel — leads/prospects that converted to this client
+     */
+    public function lead()
+    {
+        return $this->hasOne(Lead::class, 'converted_to_client_id');
+    }
+
+    public function prospect()
+    {
+        return $this->hasOne(Prospect::class, 'converted_to_client_id');
+    }
 }

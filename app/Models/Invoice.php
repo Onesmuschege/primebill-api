@@ -15,7 +15,7 @@ class Invoice extends Model
     protected string $auditAlias = 'Invoice';
 
     protected $fillable = [
-        'client_id', 'invoice_number', 'amount',
+        'client_id', 'subscription_id', 'invoice_number', 'amount',
         'tax', 'total', 'status', 'due_date',
         'paid_at', 'notes', 'created_by',
     ];
@@ -28,6 +28,11 @@ class Invoice extends Model
     public function client()
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function subscription()
+    {
+        return $this->belongsTo(CustomerSubscription::class);
     }
 
     public function payments()
