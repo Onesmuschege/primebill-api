@@ -45,6 +45,16 @@ class RolesAndPermissionsSeeder extends Seeder
 
             /*
             |--------------------------------------------------------------------------
+            | Subscriptions
+            |--------------------------------------------------------------------------
+            */
+            'view subscriptions',
+            'create subscriptions',
+            'edit subscriptions',
+            'delete subscriptions',
+
+            /*
+            |--------------------------------------------------------------------------
             | FUP
             |--------------------------------------------------------------------------
             */
@@ -250,6 +260,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit plans',
             'delete plans',
 
+            // Subscriptions
+            'view subscriptions',
+            'create subscriptions',
+            'edit subscriptions',
+            'delete subscriptions',
+
             // FUP
             'view fup',
             'edit fup',
@@ -356,6 +372,11 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // Plans
             'view plans',
+
+            // Subscriptions
+            'view subscriptions',
+            'create subscriptions',
+            'edit subscriptions',
 
             // FUP
             'view fup',

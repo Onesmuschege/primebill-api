@@ -35,7 +35,7 @@ class CustomerSubscriptionFactory extends Factory
             'auto_renew' => fake()->boolean(70),
             'prorated' => fake()->boolean(30),
             'notes' => fake()->optional()->paragraph(),
-            'metadata' => fake()->optional()->words(5, true),
+            'metadata' => fake()->optional()->words(5, true) ? ['note' => fake()->sentence()] : null,
         ];
     }
 
