@@ -55,6 +55,8 @@ Route::prefix('tenants')->group(function () {
 Route::prefix('clients/{client}')->middleware(['auth:sanctum', 'tenant'])->group(function () {
     Route::prefix('subscriptions')->group(function () {
         Route::get('/',                            [CustomerSubscriptionController::class, 'index']);
+        Route::get('/active',                      [CustomerSubscriptionController::class, 'active']);
+        Route::get('/expiring-soon',               [CustomerSubscriptionController::class, 'expiringSoon']);
         Route::get('/{subscription}',              [CustomerSubscriptionController::class, 'show']);
         Route::post('/',                           [CustomerSubscriptionController::class, 'store']);
         Route::post('/{subscription}/activate',    [CustomerSubscriptionController::class, 'activate']);
@@ -63,8 +65,6 @@ Route::prefix('clients/{client}')->middleware(['auth:sanctum', 'tenant'])->group
         Route::post('/{subscription}/cancel',      [CustomerSubscriptionController::class, 'cancel']);
         Route::post('/{subscription}/upgrade',     [CustomerSubscriptionController::class, 'upgrade']);
         Route::post('/{subscription}/renew',       [CustomerSubscriptionController::class, 'renew']);
-        Route::get('/active',                      [CustomerSubscriptionController::class, 'active']);
-        Route::get('/expiring-soon',               [CustomerSubscriptionController::class, 'expiringSoon']);
     });
 });
 
