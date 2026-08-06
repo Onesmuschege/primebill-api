@@ -28,10 +28,10 @@ class ReportService
 
         $daily = Payment::whereBetween('created_at', [$from, $to])
                         ->where('status', 'completed')
-                        ->selectRaw("DATE_FORMAT(created_at, '%Y-%m-%d') as day")
+                        ->selectRaw("TO_CHAR(created_at, 'YYYY-MM-DD') as day")
                         ->selectRaw('SUM(amount) as total')
-                        ->groupByRaw("DATE_FORMAT(created_at, '%Y-%m-%d')")
-                        ->orderByRaw("DATE_FORMAT(created_at, '%Y-%m-%d')")
+                        ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM-DD')")
+                        ->orderByRaw("TO_CHAR(created_at, 'YYYY-MM-DD')")
                         ->pluck('total', 'day')
                         ->toArray();
 
@@ -56,7 +56,7 @@ class ReportService
         ];
     }
 
-    public function getClientReport(string $from, string $to): array
+public function getClientReport(string $from, string $to): array
     {
         $newClients = Client::whereBetween('created_at', [$from, $to])->count();
         $total      = Client::count();
@@ -75,7 +75,7 @@ class ReportService
         ];
     }
 
-public function getInvoiceReport(string $from, string $to): array
+    public function getInvoiceReport(string $from, string $to): array
     {
         $aggs = Invoice::whereBetween('created_at', [$from, $to])
                        ->selectRaw('COUNT(*) as total')

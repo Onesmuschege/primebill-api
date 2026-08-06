@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Plan;
+use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -10,11 +11,20 @@ class PortalRegistrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected Tenant $tenant;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->tenant = Tenant::factory()->create(['status' => 'active']);
+        Tenant::setCurrent($this->tenant);
+    }
+
     public function test_portal_registration_creates_client_and_account(): void
     {
         $plan = Plan::factory()->create(['is_active' => true]);
 
-        $response = $this->postJson('/api/portal/register', [
+        $response = $this->postJson("/api/portal/{$this->tenant->slug}/register", [
             'first_name'            => 'Jane',
             'last_name'             => 'Doe',
             'email'                 => 'jane@example.com',
@@ -47,12 +57,12 @@ class PortalRegistrationTest extends TestCase
             'password_confirmation' => 'password123',
         ];
 
-        $this->postJson('/api/portal/register', $payload)->assertStatus(201);
+        $this->postJson("/api/portal/{$this->tenant->slug}/register", $payload)->assertStatus(201);
 
         $payload['username'] = 'usertwo';
         $payload['phone']    = '254712345680';
 
-        $this->postJson('/api/portal/register', $payload)
+        $this->postJson("/api/portal/{$this->tenant->slug}/register", $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors('email');
     }

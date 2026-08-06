@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Plan;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,6 +20,9 @@ class ClientApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        Tenant::setCurrent($tenant);
 
         $this->user  = User::factory()->create();
         $this->user->assignRole('super_admin');

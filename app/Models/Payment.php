@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Concerns\BelongsToTenant;
+use App\Traits\LogsAudit;
 
 class Payment extends Model
 {
-    use BelongsToTenant, SoftDeletes;
+    use HasFactory, BelongsToTenant, SoftDeletes, LogsAudit;
+
+    protected string $auditAlias = 'Payment';
 
     protected $fillable = [
         'client_id',

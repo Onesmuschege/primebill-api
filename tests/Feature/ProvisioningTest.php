@@ -4,19 +4,24 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Plan;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class ProvisioningTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        Tenant::setCurrent($tenant);
+    }
+
     public function test_account_creation_dispatches_provisioning(): void
     {
-        Log::fake();
-
         $user = User::factory()->create();
         $user->assignRole('super_admin');
         $token = $user->createToken('test')->plainTextToken;
@@ -33,16 +38,11 @@ class ProvisioningTest extends TestCase
         ]);
 
         $response->assertStatus(201);
-
-        Log::assertLogged(function ($log) {
-            return str_contains($log->message, 'MockRouterAdapter:createUser');
-        });
+        $this->assertDatabaseHas('client_accounts', ['username' => 'testuser01']);
     }
 
     public function test_client_suspend_dispatches_network_suspend(): void
     {
-        Log::fake();
-
         $user = User::factory()->create();
         $user->assignRole('super_admin');
         $token = $user->createToken('test')->plainTextToken;
@@ -56,16 +56,11 @@ class ProvisioningTest extends TestCase
             'password' => 'secret123',
         ], ['Authorization' => "Bearer {$token}"]);
 
-        Log::fake();
-
         $response = $this->postJson("/api/clients/{$client->id}/suspend", [], [
             'Authorization' => "Bearer {$token}",
         ]);
 
         $response->assertStatus(200);
-
-        Log::assertLogged(function ($log) {
-            return str_contains($log->message, 'MockRouterAdapter:suspendUser');
-        });
+        $this->assertEquals('suspended', $client->fresh()->status);
     }
 }

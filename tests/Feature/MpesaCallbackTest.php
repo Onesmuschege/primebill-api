@@ -6,12 +6,20 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\MpesaTransaction;
 use App\Models\Payment;
+use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class MpesaCallbackTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $tenant = Tenant::factory()->create(['status' => 'active']);
+        Tenant::setCurrent($tenant);
+    }
 
     public function test_stk_callback_records_payment_and_marks_transaction_completed(): void
     {
@@ -58,8 +66,9 @@ class MpesaCallbackTest extends TestCase
             ],
         ];
 
-        $this->postJson('/api/mpesa/stk-callback', $payload)
-            ->assertStatus(200)
+        $response = $this->postJson('/api/mpesa/stk-callback', $payload);
+
+        $response->assertStatus(200)
             ->assertJson(['ResultCode' => 0]);
 
         $tx->refresh();

@@ -21,7 +21,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('slug')->unique();
-            $table->enum('status', ['active', 'suspended', 'trial'])->default('active');
+            $table->enum('status', ['active', 'suspended', 'trial', 'archived'])->default('active');
             $table->string('plan')->default('starter'); // platform subscription tier — not used yet, reserved
             $table->string('timezone')->default('Africa/Nairobi');
             $table->string('currency', 3)->default('KES');

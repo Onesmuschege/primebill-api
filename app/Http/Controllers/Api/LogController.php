@@ -4,10 +4,18 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\SystemLog;
+use App\Services\Audit\AuditService;
 use Illuminate\Http\Request;
 
 class LogController extends Controller
 {
+    protected AuditService $auditService;
+
+    public function __construct(AuditService $auditService)
+    {
+        $this->auditService = $auditService;
+    }
+
     // GET /api/logs
     public function index(Request $request)
     {
@@ -85,6 +93,25 @@ class LogController extends Controller
         return response($csv, 200, [
             'Content-Type'        => 'text/csv',
             'Content-Disposition' => 'attachment; filename=system_logs.csv',
+        ]);
+    }
+
+    // GET /api/logs/stats - Get audit statistics
+    public function stats(Request $request)
+    {
+        $request->validate([
+            'from' => 'required|date',
+            'to'   => 'required|date',
+        ]);
+
+        $stats = $this->auditService->getStats(
+            \Carbon\Carbon::parse($request->from),
+            \Carbon\Carbon::parse($request->to)
+        );
+
+        return response()->json([
+            'success' => true,
+            'data'    => $stats,
         ]);
     }
 }

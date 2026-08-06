@@ -32,6 +32,8 @@ return new class extends Migration
 
             DB::statement("ALTER TABLE ledger_entries DROP CONSTRAINT IF EXISTS ledger_entries_entry_type_check");
             DB::statement("ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_entry_type_check CHECK (entry_type::text = ANY (ARRAY['invoice_debit'::text, 'payment_credit'::text, 'payment_reversal'::text, 'adjustment'::text, 'invoice_reversal'::text]))");
+        } elseif ($driver === 'sqlite') {
+            // SQLite: no native enum support — skip (string columns handle this fine).
         } else {
             // MySQL: full enum replace.
             DB::statement("ALTER TABLE invoices MODIFY COLUMN status ENUM('draft','unpaid','paid','overdue','cancelled','partial') NOT NULL DEFAULT 'unpaid'");
@@ -49,6 +51,8 @@ return new class extends Migration
 
             DB::statement("ALTER TABLE ledger_entries DROP CONSTRAINT IF EXISTS ledger_entries_entry_type_check");
             DB::statement("ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_entry_type_check CHECK (entry_type::text = ANY (ARRAY['invoice_debit'::text, 'payment_credit'::text, 'payment_reversal'::text, 'adjustment'::text]))");
+        } elseif ($driver === 'sqlite') {
+            // SQLite: no native enum support — skip (string columns handle this fine).
         } else {
             DB::statement("ALTER TABLE invoices MODIFY COLUMN status ENUM('draft','unpaid','paid','overdue','cancelled') NOT NULL DEFAULT 'unpaid'");
             DB::statement("ALTER TABLE ledger_entries MODIFY COLUMN entry_type ENUM('invoice_debit','payment_credit','payment_reversal','adjustment') NOT NULL");

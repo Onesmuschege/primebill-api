@@ -69,4 +69,48 @@ class DashboardController extends Controller
             'data'    => $data,
         ]);
     }
+
+    // GET /api/dashboard/analytics
+    public function analytics()
+    {
+        $data = $this->dashboardService->getAnalytics();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $data,
+        ]);
+    }
+
+    // GET /api/dashboard/expenditure-summary
+    public function expenditureSummary()
+    {
+        $data = $this->dashboardService->getExpenditureSummary();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $data,
+        ]);
+    }
+
+    // GET /api/dashboard/invoice-aging
+    public function invoiceAging()
+    {
+        $data = $this->dashboardService->getInvoiceAging();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $data,
+        ]);
+    }
+
+    // GET /api/dashboard/churn-analysis
+    public function churnAnalysis()
+    {
+        $data = $this->dashboardService->getChurnAnalysis();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $data,
+        ]);
+    }
 }

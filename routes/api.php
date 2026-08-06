@@ -40,11 +40,50 @@ use App\Http\Controllers\Api\RadiusSettingsController;
 use App\Http\Controllers\Api\TicketEscalateController;
 use App\Http\Controllers\Api\TenantRegistrationController;
 use App\Http\Controllers\Api\PlatformAdminController;
+use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\PlatformSubscriptionController;
+use App\Http\Controllers\Api\SubscriptionPaymentController;
+use App\Http\Controllers\Api\CustomerSubscriptionController;
 
 // ─── ISP self-registration (this is how a new tenant signs up for PrimeBill itself) ──
 Route::prefix('tenants')->group(function () {
     Route::post('/register',   [TenantRegistrationController::class, 'register'])->middleware('throttle:5,1');
     Route::get('/check-slug',  [TenantRegistrationController::class, 'checkSlug'])->middleware('throttle:30,1');
+});
+
+// ─── Customer Lifecycle Management ─────────────────────────────────────────
+Route::prefix('clients/{client}')->middleware(['auth:sanctum', 'tenant'])->group(function () {
+    Route::prefix('subscriptions')->group(function () {
+        Route::get('/',                            [CustomerSubscriptionController::class, 'index']);
+        Route::get('/{subscription}',              [CustomerSubscriptionController::class, 'show']);
+        Route::post('/',                           [CustomerSubscriptionController::class, 'store']);
+        Route::post('/{subscription}/activate',    [CustomerSubscriptionController::class, 'activate']);
+        Route::post('/{subscription}/suspend',     [CustomerSubscriptionController::class, 'suspend']);
+        Route::post('/{subscription}/resume',      [CustomerSubscriptionController::class, 'resume']);
+        Route::post('/{subscription}/cancel',      [CustomerSubscriptionController::class, 'cancel']);
+        Route::post('/{subscription}/upgrade',     [CustomerSubscriptionController::class, 'upgrade']);
+        Route::post('/{subscription}/renew',       [CustomerSubscriptionController::class, 'renew']);
+        Route::get('/active',                      [CustomerSubscriptionController::class, 'active']);
+        Route::get('/expiring-soon',               [CustomerSubscriptionController::class, 'expiringSoon']);
+    });
+});
+
+// ─── Subscription & Licensing Engine ───────────────────────────────────────
+Route::prefix('subscription')->middleware(['auth:sanctum', 'tenant'])->group(function () {
+    Route::get('/plans',           [SubscriptionController::class, 'plans']);
+    Route::get('/current',         [SubscriptionController::class, 'current']);
+    Route::post('/start-trial',    [SubscriptionController::class, 'startTrial']);
+    Route::post('/convert',        [SubscriptionController::class, 'convert']);
+    Route::post('/cancel',         [SubscriptionController::class, 'cancel']);
+    Route::get('/invoices',        [SubscriptionController::class, 'invoices']);
+    Route::get('/usage',           [SubscriptionController::class, 'usage']);
+
+    // Subscription Payments (M-Pesa)
+    Route::prefix('payment')->group(function () {
+        Route::post('/initiate',   [SubscriptionPaymentController::class, 'initiate']);
+        Route::post('/callback',   [SubscriptionPaymentController::class, 'callback']);
+        Route::get('/history',     [SubscriptionPaymentController::class, 'history']);
+    });
 });
 
 // RADIUS accounting webhook (no auth)
@@ -220,9 +259,13 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Dashboard
     Route::prefix('dashboard')->group(function () {
-        Route::get('/stats',           [DashboardController::class, 'stats']);
-        Route::get('/traffic',         [DashboardController::class, 'traffic']);
-        Route::get('/top-downloaders', [DashboardController::class, 'topDownloaders']);
+        Route::get('/stats',              [DashboardController::class, 'stats']);
+        Route::get('/traffic',            [DashboardController::class, 'traffic']);
+        Route::get('/top-downloaders',    [DashboardController::class, 'topDownloaders']);
+        Route::get('/analytics',          [DashboardController::class, 'analytics']);
+        Route::get('/expenditure-summary', [DashboardController::class, 'expenditureSummary']);
+        Route::get('/invoice-aging',      [DashboardController::class, 'invoiceAging']);
+        Route::get('/churn-analysis',    [DashboardController::class, 'churnAnalysis']);
     });
 
     // Analytics
@@ -277,6 +320,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Logs
     Route::prefix('logs')->middleware('permission:view logs')->group(function () {
         Route::get('/export',       [LogController::class, 'export']);
+        Route::get('/stats',        [LogController::class, 'stats']);
         Route::get('/',             [LogController::class, 'index']);
         Route::get('/{systemLog}',  [LogController::class, 'show']);
     });
@@ -349,9 +393,54 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 // NOT resolve or scope to any single tenant. Gated by 'platform_admin'
 // (EnsurePlatformAdmin), which checks users.is_platform_admin directly.
 Route::prefix('platform')->middleware(['auth:sanctum', 'platform_admin'])->group(function () {
+    // Stats & Plans
     Route::get('/stats',                  [PlatformAdminController::class, 'stats']);
+    Route::get('/plans',                  [PlatformAdminController::class, 'plans']);
+
+    // Tenant CRUD
     Route::get('/tenants',                [PlatformAdminController::class, 'tenants']);
+    Route::post('/tenants',               [PlatformAdminController::class, 'createTenant']);
     Route::get('/tenants/{tenant}',       [PlatformAdminController::class, 'showTenant']);
-    Route::post('/tenants/{tenant}/suspend', [PlatformAdminController::class, 'suspend']);
-    Route::post('/tenants/{tenant}/activate', [PlatformAdminController::class, 'activate']);
+    Route::put('/tenants/{tenant}',       [PlatformAdminController::class, 'updateTenant']);
+    Route::delete('/tenants/{tenant}',   [PlatformAdminController::class, 'destroy']);
+
+    // Tenant Configuration
+    Route::post('/tenants/{tenant}/company',     [PlatformAdminController::class, 'configureCompany']);
+    Route::post('/tenants/{tenant}/branding',   [PlatformAdminController::class, 'configureBranding']);
+    Route::post('/tenants/{tenant}/localization', [PlatformAdminController::class, 'configureLocalization']);
+    Route::post('/tenants/{tenant}/plan',       [PlatformAdminController::class, 'assignPlan']);
+
+    // Tenant Lifecycle
+    Route::post('/tenants/{tenant}/suspend',    [PlatformAdminController::class, 'suspend']);
+    Route::post('/tenants/{tenant}/activate',    [PlatformAdminController::class, 'activate']);
+    Route::post('/tenants/{tenant}/archive',    [PlatformAdminController::class, 'archive']);
+
+    // Quotas & Limits
+    Route::post('/tenants/{tenant}/quotas',     [PlatformAdminController::class, 'updateQuotas']);
+
+    // Feature Flags
+    Route::post('/tenants/{tenant}/features',     [PlatformAdminController::class, 'updateFeatureFlags']);
+    Route::post('/tenants/{tenant}/features/add',  [PlatformAdminController::class, 'addFeatureFlag']);
+    Route::post('/tenants/{tenant}/features/remove', [PlatformAdminController::class, 'removeFeatureFlag']);
+
+    // Health & Billing
+    Route::get('/tenants/{tenant}/health',       [PlatformAdminController::class, 'tenantHealth']);
+    Route::get('/tenants/{tenant}/billing',      [PlatformAdminController::class, 'tenantBilling']);
+    Route::get('/tenants/{tenant}/subscription', [PlatformAdminController::class, 'tenantSubscription']);
+
+    // Impersonation
+    Route::post('/tenants/{tenant}/impersonate', [PlatformAdminController::class, 'impersonate']);
+    Route::post('/impersonate/end',              [PlatformAdminController::class, 'endImpersonation']);
+
+    // Admin User Management
+    Route::post('/tenants/{tenant}/admin',      [PlatformAdminController::class, 'createAdmin']);
+
+    // Subscription Management
+    Route::get('/subscriptions',           [PlatformSubscriptionController::class, 'index']);
+    Route::get('/subscription-stats',      [PlatformSubscriptionController::class, 'stats']);
+    Route::post('/subscriptions/{subscription}/upgrade', [PlatformSubscriptionController::class, 'upgrade']);
+    Route::post('/subscriptions/{subscription}/suspend', [PlatformSubscriptionController::class, 'suspend']);
+    Route::post('/subscriptions/{subscription}/resume', [PlatformSubscriptionController::class, 'resume']);
+    Route::post('/subscriptions/{subscription}/cancel', [PlatformSubscriptionController::class, 'cancel']);
+    Route::post('/subscriptions/{subscription}/renew', [PlatformSubscriptionController::class, 'renew']);
 });

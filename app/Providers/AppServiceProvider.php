@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Audit\AuditService;
 use App\Services\Network\MikroTikRouterAdapter;
 use App\Services\Network\MockRouterAdapter;
 use App\Services\Network\RouterAdapterInterface;
@@ -26,6 +27,11 @@ class AppServiceProvider extends ServiceProvider
                 'freeradius' => $app->make(FreeRadiusAdapter::class),
                 default      => $app->make(MockRadiusAdapter::class),
             };
+        });
+
+        // Register AuditService as a singleton for centralized audit logging
+        $this->app->singleton(AuditService::class, function ($app) {
+            return new AuditService();
         });
     }
 

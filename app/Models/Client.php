@@ -4,13 +4,16 @@ namespace App\Models;
 
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Concerns\BelongsToTenant;
+use App\Traits\LogsAudit;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 class Client extends Authenticatable
 {
-    use HasApiTokens, HasFactory, BelongsToTenant, SoftDeletes;
+    use HasApiTokens, HasFactory, BelongsToTenant, SoftDeletes, LogsAudit;
+
+    protected string $auditAlias = 'Client';
 
     protected $fillable = [
         'first_name', 'last_name', 'email', 'phone',

@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -13,6 +15,8 @@ class PasswordResetTest extends TestCase
 
     public function test_forgot_password_returns_success_for_valid_email(): void
     {
+        Notification::fake();
+
         $user = User::factory()->create(['email' => 'admin@test.com']);
 
         $response = $this->postJson('/api/auth/password/forgot', [
@@ -21,6 +25,8 @@ class PasswordResetTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('success', true);
+
+        Notification::assertSentTo($user, ResetPassword::class);
     }
 
     public function test_password_can_be_reset_with_valid_token(): void

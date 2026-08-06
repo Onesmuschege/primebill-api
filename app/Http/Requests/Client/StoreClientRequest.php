@@ -17,7 +17,7 @@ class StoreClientRequest extends FormRequest
         return [
             'first_name'   => ['required', 'string', 'max:50', 'regex:/^[a-zA-Z\s]+$/'],
             'last_name'    => ['required', 'string', 'max:50', 'regex:/^[a-zA-Z\s]+$/'],
-            'email'        => ['nullable', 'email:rfc,dns', Rule::unique('clients', 'email')],
+            'email'        => ['nullable', 'email:rfc', Rule::unique('clients', 'email')],
             'phone'        => ['required', 'regex:/^(254|\+254|0)[1-9]\d{8}$/', Rule::unique('clients', 'phone')],
             'id_number'    => ['nullable', 'regex:/^\d{1,8}$/', Rule::unique('clients', 'id_number')],
             'address'      => ['nullable', 'string', 'min:5', 'max:500'],
