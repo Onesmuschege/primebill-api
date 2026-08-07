@@ -44,6 +44,12 @@ use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\PlatformSubscriptionController;
 use App\Http\Controllers\Api\SubscriptionPaymentController;
 use App\Http\Controllers\Api\CustomerSubscriptionController;
+use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\Api\ProspectController;
+use App\Http\Controllers\Api\ClientNoteController;
+use App\Http\Controllers\Api\ClientTagController;
+use App\Http\Controllers\Api\ClientCustomFieldController;
+use App\Http\Controllers\Api\WorkOrderController;
 
 // ─── ISP self-registration (this is how a new tenant signs up for PrimeBill itself) ──
 Route::prefix('tenants')->group(function () {
@@ -157,6 +163,31 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::post('/change-password',  [AuthController::class, 'changePassword']);
     });
 
+    // Leads (CRM)
+    Route::prefix('leads')->middleware('permission:view leads')->group(function () {
+        Route::get('/stats',              [LeadController::class, 'stats']); // before /{lead}
+        Route::get('/',                   [LeadController::class, 'index']);
+        Route::post('/',                  [LeadController::class, 'store'])->middleware('permission:create leads');
+        Route::get('/{lead}',             [LeadController::class, 'show']);
+        Route::put('/{lead}',             [LeadController::class, 'update'])->middleware('permission:edit leads');
+        Route::delete('/{lead}',          [LeadController::class, 'destroy'])->middleware('permission:delete leads');
+        Route::post('/{lead}/convert',    [LeadController::class, 'convert'])->middleware('permission:create prospects');
+        Route::post('/{lead}/lost',       [LeadController::class, 'markLost'])->middleware('permission:edit leads');
+    });
+
+    // Prospects (Sales Pipeline)
+    Route::prefix('prospects')->middleware('permission:view prospects')->group(function () {
+        Route::get('/stats',              [ProspectController::class, 'stats']); // before /{prospect}
+        Route::get('/',                   [ProspectController::class, 'index']);
+        Route::post('/',                  [ProspectController::class, 'store'])->middleware('permission:create prospects');
+        Route::get('/{prospect}',         [ProspectController::class, 'show']);
+        Route::put('/{prospect}',         [ProspectController::class, 'update'])->middleware('permission:edit prospects');
+        Route::delete('/{prospect}',      [ProspectController::class, 'destroy'])->middleware('permission:delete prospects');
+        Route::post('/{prospect}/advance',[ProspectController::class, 'advance'])->middleware('permission:edit prospects');
+        Route::post('/{prospect}/won',    [ProspectController::class, 'markWon'])->middleware('permission:edit prospects');
+        Route::post('/{prospect}/lost',   [ProspectController::class, 'markLost'])->middleware('permission:edit prospects');
+    });
+
     // Clients
     Route::prefix('clients')->middleware('permission:view clients')->group(function () {
         Route::get('/',                                     [ClientController::class, 'index']);
@@ -169,6 +200,26 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/{client}/payments',                    [ClientController::class, 'payments']);
         Route::get('/{client}/balance',                     [ClientController::class, 'balance']);
         Route::get('/{client}/tickets',                     [ClientController::class, 'tickets']);
+
+        // CRM — Notes
+        Route::prefix('{client}/notes')->group(function () {
+            Route::get('/',              [ClientNoteController::class, 'index']);
+            Route::post('/',             [ClientNoteController::class, 'store'])->middleware('permission:edit clients');
+            Route::get('/{noteId}',      [ClientNoteController::class, 'show']);
+            Route::put('/{noteId}',      [ClientNoteController::class, 'update'])->middleware('permission:edit clients');
+            Route::delete('/{noteId}',   [ClientNoteController::class, 'destroy'])->middleware('permission:edit clients');
+            Route::post('/{noteId}/pin', [ClientNoteController::class, 'togglePin'])->middleware('permission:edit clients');
+        });
+
+        // CRM — Tags
+        Route::get('/{client}/tags',      [ClientTagController::class, 'clientTags']);
+        Route::post('/{client}/tags/assign',   [ClientTagController::class, 'assignToClient']);
+        Route::delete('/{client}/tags/remove', [ClientTagController::class, 'removeFromClient']);
+
+        // CRM — Custom Fields
+        Route::get('/{client}/custom-fields',           [ClientCustomFieldController::class, 'clientValues']);
+        Route::put('/{client}/custom-fields',           [ClientCustomFieldController::class, 'updateClientValues']);
+
         Route::post('/{client}/suspend',                    [ClientController::class, 'suspend'])->middleware('permission:suspend clients');
         Route::post('/{client}/activate',                   [ClientController::class, 'activate'])->middleware('permission:activate clients');
         Route::post('/{client}/accounts',                   [ClientAccountController::class, 'store'])->middleware('permission:edit clients');
@@ -383,6 +434,43 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/code',   [ReferralController::class, 'getCode']);
         Route::post('/join',  [ReferralController::class, 'join']);
         Route::get('/stats',  [ReferralController::class, 'stats']);
+    });
+
+    // Field Operations — Work Orders
+    Route::prefix('work-orders')->middleware('permission:view work-orders')->group(function () {
+        Route::get('/stats',              [WorkOrderController::class, 'stats']);
+        Route::get('/',                   [WorkOrderController::class, 'index']);
+        Route::get('/{workOrder}',        [WorkOrderController::class, 'show']);
+        Route::put('/{workOrder}',        [WorkOrderController::class, 'update'])->middleware('permission:edit work-orders');
+        Route::delete('/{workOrder}',     [WorkOrderController::class, 'destroy'])->middleware('permission:delete work-orders');
+        Route::post('/{workOrder}/assign',[WorkOrderController::class, 'assignTechnician'])->middleware('permission:edit work-orders');
+        Route::post('/{workOrder}/status',[WorkOrderController::class, 'updateStatus'])->middleware('permission:edit work-orders');
+    });
+
+    // Technician workload
+    Route::get('/technicians/{technician}/workload', [WorkOrderController::class, 'technicianWorkload'])->middleware('permission:view work-orders');
+
+    // Work Orders — create under client
+    Route::prefix('clients/{client}/work-orders')->middleware(['auth:sanctum', 'tenant'])->group(function () {
+        Route::post('/', [WorkOrderController::class, 'store'])->middleware('permission:create work-orders');
+    });
+
+    // CRM — Tags (root-level routes)
+    Route::prefix('tags')->middleware('permission:view tags')->group(function () {
+        Route::get('/',        [ClientTagController::class, 'index']);
+        Route::post('/',       [ClientTagController::class, 'store'])->middleware('permission:create tags');
+        Route::get('/{tag}',   [ClientTagController::class, 'show']);
+        Route::put('/{tag}',   [ClientTagController::class, 'update'])->middleware('permission:edit tags');
+        Route::delete('/{tag}',[ClientTagController::class, 'destroy'])->middleware('permission:delete tags');
+    });
+
+    // CRM — Custom Fields (root-level routes)
+    Route::prefix('custom-fields')->middleware('permission:view custom-fields')->group(function () {
+        Route::get('/',        [ClientCustomFieldController::class, 'index']);
+        Route::post('/',       [ClientCustomFieldController::class, 'store'])->middleware('permission:create custom-fields');
+        Route::get('/{field}', [ClientCustomFieldController::class, 'show']);
+        Route::put('/{field}', [ClientCustomFieldController::class, 'update'])->middleware('permission:edit custom-fields');
+        Route::delete('/{field}', [ClientCustomFieldController::class, 'destroy'])->middleware('permission:delete custom-fields');
     });
 
 });
