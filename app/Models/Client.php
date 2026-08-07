@@ -61,6 +61,23 @@ class Client extends Authenticatable
         return $this->morphMany(Address::class, 'addressable');
     }
 
+    public function notes()
+    {
+        return $this->hasMany(ClientNote::class);
+    }
+
+    public function tags()
+    {
+        return $this->belongsToMany(ClientTag::class, 'client_tag_assignments', 'client_id', 'client_tag_id')
+            ->withPivot('tenant_id', 'assigned_by')
+            ->withTimestamps();
+    }
+
+    public function customFieldValues()
+    {
+        return $this->hasMany(ClientCustomFieldValue::class);
+    }
+
     public function documents()
     {
         return $this->hasMany(ClientDocument::class);
