@@ -23,6 +23,66 @@ class RolesAndPermissionsSeeder extends Seeder
 
             /*
             |--------------------------------------------------------------------------
+            | Leads (CRM)
+            |--------------------------------------------------------------------------
+            */
+            'view leads',
+            'create leads',
+            'edit leads',
+            'delete leads',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Prospects (Sales Pipeline)
+            |--------------------------------------------------------------------------
+            */
+            'view prospects',
+            'create prospects',
+            'edit prospects',
+            'delete prospects',
+
+            /*
+            |--------------------------------------------------------------------------
+            | CRM - Notes
+            |--------------------------------------------------------------------------
+            */
+            'view notes',
+            'create notes',
+            'edit notes',
+            'delete notes',
+
+            /*
+            |--------------------------------------------------------------------------
+            | CRM - Tags
+            |--------------------------------------------------------------------------
+            */
+            'view tags',
+            'create tags',
+            'edit tags',
+            'delete tags',
+
+            /*
+            |--------------------------------------------------------------------------
+            | CRM - Custom Fields
+            |--------------------------------------------------------------------------
+            */
+            'view custom-fields',
+            'create custom-fields',
+            'edit custom-fields',
+            'delete custom-fields',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Field Operations - Work Orders
+            |--------------------------------------------------------------------------
+            */
+            'view work-orders',
+            'create work-orders',
+            'edit work-orders',
+            'delete work-orders',
+
+            /*
+            |--------------------------------------------------------------------------
             | Clients
             |--------------------------------------------------------------------------
             */
@@ -246,6 +306,18 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $admin->syncPermissions([
 
+            // Leads (CRM)
+            'view leads',
+            'create leads',
+            'edit leads',
+            'delete leads',
+
+            // Prospects (Sales Pipeline)
+            'view prospects',
+            'create prospects',
+            'edit prospects',
+            'delete prospects',
+
             // Clients
             'view clients',
             'create clients',
@@ -362,6 +434,16 @@ class RolesAndPermissionsSeeder extends Seeder
         ]);
 
         $staff->syncPermissions([
+
+            // Leads (CRM)
+            'view leads',
+            'create leads',
+            'edit leads',
+
+            // Prospects (Sales Pipeline)
+            'view prospects',
+            'create prospects',
+            'edit prospects',
 
             // Clients
             'view clients',
