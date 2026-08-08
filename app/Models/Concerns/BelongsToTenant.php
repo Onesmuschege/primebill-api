@@ -42,6 +42,45 @@ trait BelongsToTenant
         });
     }
 
+    /**
+     * Tenancy-aware implicit route model binding.
+     *
+     * Laravel's default implicit binding resolves the model with
+     * findOrFail() on an unscoped query. Because the tenant global scope
+     * reads Tenant::current() at query time, and route binding can run
+     * before the ResolveTenant middleware has bound the current tenant,
+     * a cross-tenant model could otherwise be resolved and returned.
+     *
+     * Overriding resolveRouteBinding ensures the binding query is scoped to
+     * the current tenant (when one is resolved), so /clients/{id} for a
+     * record belonging to another tenant correctly 404s instead of leaking.
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $query = $this->newQuery();
+
+        // The tenant global scope reads Tenant::current() at query time.
+        // If the ResolveTenant middleware hasn't run yet when route binding
+        // fires, current() is null and the scope silently skips filtering —
+        // which would let a cross-tenant model be resolved. As a robust
+        // fallback, scope by the authenticated user's tenant so binding is
+        // always tenant-safe regardless of middleware ordering.
+        if (!Tenant::current()) {
+            $user = auth('sanctum')->user();
+            if ($user && $user->tenant_id) {
+                $query->where($this->getTable() . '.tenant_id', $user->tenant_id);
+            }
+        }
+
+        if ($field) {
+            $query->where($field, $value);
+        } else {
+            $query->where($this->getRouteKeyName(), $value);
+        }
+
+        return $query->firstOrFail();
+    }
+
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
