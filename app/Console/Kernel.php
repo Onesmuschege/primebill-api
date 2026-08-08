@@ -24,8 +24,32 @@ class Kernel extends ConsoleKernel
         // Suspend expired tenants every 6 hours
         $schedule->command('subscriptions:suspend-expired')->everySixHours();
 
-        // Renew subscriptions after payment every 2 hours
+// Renew subscriptions after payment every 2 hours
         $schedule->command('subscriptions:renew')->everyTwoHours();
+
+// NOC — poll device metrics every 5 minutes
+        $schedule->command('network:poll-metrics')->everyFiveMinutes();
+
+        // Fiber/OLT — poll ONT optical signal every 10 minutes
+        $schedule->command('fiber:poll-ont-signal')->everyTenMinutes();
+
+        // Network Core — reconcile stale RADIUS sessions every 10 minutes
+        $schedule->command('network:reconcile-sessions')->everyTenMinutes();
+
+        // Network Core — reconcile service entitlements (suspension/restoration) every 30 minutes
+        $schedule->command('network:reconcile-entitlements')->everyThirtyMinutes();
+
+        // Network Core — evaluate FUP thresholds every hour
+        $schedule->command('network:evaluate-fup')->hourly();
+
+        // Network Core — retry failed provisioning/CoA operations every 15 minutes
+        $schedule->command('network:retry-failed-provisioning')->everyFifteenMinutes();
+
+        // Network Core — sync RADIUS users from billing to FreeRADIUS daily at 2 AM
+        $schedule->command('network:sync-radius')->dailyAt('02:00');
+
+        // Network Core — clean old logs after 90 days
+        $schedule->command('network:clean-logs')->dailyAt('03:00');
     }
 
     /**

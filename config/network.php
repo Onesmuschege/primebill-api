@@ -14,7 +14,9 @@ return [
 
     'router_driver' => env('NETWORK_ROUTER_DRIVER', 'mock'),
 
-    'radius_driver' => env('NETWORK_RADIUS_DRIVER', 'mock'),
+'radius_driver' => env('NETWORK_RADIUS_DRIVER', 'mock'),
+
+    'olt_driver' => env('NETWORK_OLT_DRIVER', 'mock'),
 
     /*
     |--------------------------------------------------------------------------
@@ -58,5 +60,28 @@ return [
     */
 
     'radius_webhook_secret' => env('RADIUS_WEBHOOK_SECRET', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Grace Period (days)
+    |--------------------------------------------------------------------------
+    |
+    | Number of days after the invoice due date before service is suspended.
+    |
+    */
+
+    'grace_period_days' => env('GRACE_PERIOD_DAYS', 3),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Stale Threshold (minutes)
+    |--------------------------------------------------------------------------
+    |
+    | Minutes without RADIUS interim accounting before a session is
+    | considered stale and eligible for reconciliation.
+    |
+    */
+
+    'stale_session_minutes' => env('STALE_SESSION_MINUTES', 5),
 
 ];

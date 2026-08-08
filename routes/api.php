@@ -50,6 +50,16 @@ use App\Http\Controllers\Api\ClientNoteController;
 use App\Http\Controllers\Api\ClientTagController;
 use App\Http\Controllers\Api\ClientCustomFieldController;
 use App\Http\Controllers\Api\WorkOrderController;
+use App\Http\Controllers\Api\OltController;
+use App\Http\Controllers\Api\FiberController;
+use App\Http\Controllers\Api\NocController;
+use App\Http\Controllers\Api\IpamController;
+use App\Http\Controllers\Api\MfaController;
+use App\Http\Controllers\Api\ApiKeyController;
+use App\Http\Controllers\Api\LoginHistoryController;
+use App\Http\Controllers\Api\NetworkDashboardController;
+use App\Http\Controllers\Api\ServiceNetworkController;
+use App\Http\Controllers\Api\SessionController;
 
 // ─── ISP self-registration (this is how a new tenant signs up for PrimeBill itself) ──
 Route::prefix('tenants')->group(function () {
@@ -154,13 +164,44 @@ Route::prefix('portal/{tenant_slug}')->middleware('tenant')->group(function () {
 });
 
 // ─── Protected Admin/Staff routes ─────────────────────────────────────────────
-Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
+Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 'ip.restriction'])->group(function () {
 
     // Auth
     Route::prefix('auth')->group(function () {
         Route::get('/me',                [AuthController::class, 'me']);
         Route::post('/logout',           [AuthController::class, 'logout']);
         Route::post('/change-password',  [AuthController::class, 'changePassword']);
+    });
+
+    // MFA
+    Route::prefix('mfa')->middleware('auth:sanctum')->group(function () {
+        Route::post('/generate',     [MfaController::class, 'generate']);
+        Route::post('/enable',       [MfaController::class, 'enable']);
+        Route::post('/verify',       [MfaController::class, 'verify']);
+        Route::post('/challenge',    [MfaController::class, 'challenge']);
+        Route::post('/disable',      [MfaController::class, 'disable']);
+        Route::get('/status',        [MfaController::class, 'status']);
+        Route::post('/backup-codes', [MfaController::class, 'regenerateBackupCodes']);
+    });
+
+    // API Keys
+    Route::prefix('api-keys')->middleware('auth:sanctum')->group(function () {
+        Route::get('/',  [ApiKeyController::class, 'index']);
+        Route::post('/', [ApiKeyController::class, 'store']);
+        Route::delete('/{id}', [ApiKeyController::class, 'destroy']);
+    });
+
+    // Login History
+    Route::prefix('login-history')->middleware('auth:sanctum')->group(function () {
+        Route::get('/', [LoginHistoryController::class, 'index']);
+        Route::get('/security-events', [LoginHistoryController::class, 'securityEvents']);
+    });
+
+    // Session Management
+    Route::prefix('sessions')->middleware('auth:sanctum')->group(function () {
+        Route::get('/',                [SessionController::class, 'index']);
+        Route::delete('/revoke-all',   [SessionController::class, 'revokeAll']);
+        Route::delete('/{id}',         [SessionController::class, 'destroy']);
     });
 
     // Leads (CRM)
@@ -465,13 +506,151 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::delete('/{tag}',[ClientTagController::class, 'destroy'])->middleware('permission:delete tags');
     });
 
-    // CRM — Custom Fields (root-level routes)
+// CRM — Custom Fields (root-level routes)
     Route::prefix('custom-fields')->middleware('permission:view custom-fields')->group(function () {
         Route::get('/',        [ClientCustomFieldController::class, 'index']);
         Route::post('/',       [ClientCustomFieldController::class, 'store'])->middleware('permission:create custom-fields');
         Route::get('/{field}', [ClientCustomFieldController::class, 'show']);
         Route::put('/{field}', [ClientCustomFieldController::class, 'update'])->middleware('permission:edit custom-fields');
         Route::delete('/{field}', [ClientCustomFieldController::class, 'destroy'])->middleware('permission:delete custom-fields');
+    });
+
+    // IPAM — IP Pools, Subnets, Allocations, Reservations, DHCP & VLANs
+    Route::prefix('ipam')->group(function () {
+        // Summary
+        Route::get('/summary', [IpamController::class, 'summary']);
+
+        // Pools
+        Route::prefix('pools')->middleware('permission:view ipam')->group(function () {
+            Route::get('/',                    [IpamController::class, 'indexPools']);
+            Route::post('/',                   [IpamController::class, 'storePool'])->middleware('permission:manage ipam');
+            Route::get('/{pool}',              [IpamController::class, 'showPool']);
+            Route::put('/{pool}',              [IpamController::class, 'updatePool'])->middleware('permission:manage ipam');
+            Route::delete('/{pool}',           [IpamController::class, 'destroyPool'])->middleware('permission:manage ipam');
+        });
+
+        // Subnets
+        Route::prefix('subnets')->middleware('permission:view ipam')->group(function () {
+            Route::get('/',                    [IpamController::class, 'indexSubnets']);
+            Route::post('/',                   [IpamController::class, 'storeSubnet'])->middleware('permission:manage ipam');
+            Route::get('/{subnet}',            [IpamController::class, 'showSubnet']);
+            Route::put('/{subnet}',            [IpamController::class, 'updateSubnet'])->middleware('permission:manage ipam');
+            Route::delete('/{subnet}',         [IpamController::class, 'destroySubnet'])->middleware('permission:manage ipam');
+        });
+
+        // Allocations
+        Route::prefix('allocations')->middleware('permission:view ipam')->group(function () {
+            Route::get('/',                    [IpamController::class, 'indexAllocations']);
+            Route::post('/',                   [IpamController::class, 'storeAllocation'])->middleware('permission:manage ipam');
+            Route::post('/{allocation}/release', [IpamController::class, 'releaseAllocation'])->middleware('permission:manage ipam');
+            Route::get('/{allocation}/history',  [IpamController::class, 'allocationHistory']);
+        });
+
+        // Reservations
+        Route::prefix('reservations')->middleware('permission:view ipam')->group(function () {
+            Route::get('/',                    [IpamController::class, 'indexReservations']);
+            Route::post('/',                   [IpamController::class, 'storeReservation'])->middleware('permission:manage ipam');
+            Route::delete('/{reservation}',    [IpamController::class, 'destroyReservation'])->middleware('permission:manage ipam');
+        });
+
+        // DHCP
+        Route::prefix('dhcp')->middleware('permission:view ipam')->group(function () {
+            Route::get('/pools',               [IpamController::class, 'indexDhcpPools']);
+            Route::post('/pools',              [IpamController::class, 'storeDhcpPool'])->middleware('permission:manage ipam');
+            Route::get('/leases',              [IpamController::class, 'indexDhcpLeases']);
+            Route::post('/leases',             [IpamController::class, 'storeDhcpLease'])->middleware('permission:manage ipam');
+        });
+
+// VLANs
+        Route::prefix('vlans')->middleware('permission:view ipam')->group(function () {
+            Route::get('/',                    [IpamController::class, 'indexVlans']);
+            Route::post('/',                   [IpamController::class, 'storeVlan'])->middleware('permission:manage ipam');
+            Route::get('/{vlan}',              [IpamController::class, 'showVlan']);
+            Route::put('/{vlan}',              [IpamController::class, 'updateVlan'])->middleware('permission:manage ipam');
+            Route::delete('/{vlan}',           [IpamController::class, 'destroyVlan'])->middleware('permission:manage ipam');
+            Route::post('/assign',             [IpamController::class, 'assignVlan'])->middleware('permission:manage ipam');
+        });
+    });
+
+    // NOC — Network Operations Center
+    Route::prefix('noc')->group(function () {
+        Route::get('/overview',        [NocController::class, 'overview'])->middleware('permission:view network');
+        Route::get('/devices',         [NocController::class, 'devices'])->middleware('permission:view network');
+        Route::get('/devices/{router}',[NocController::class, 'showDevice'])->middleware('permission:view network');
+        Route::get('/devices/{router}/metrics', [NocController::class, 'metrics'])->middleware('permission:view network');
+
+        Route::get('/alerts',          [NocController::class, 'alerts'])->middleware('permission:view network');
+        Route::post('/alerts/{alert}/acknowledge', [NocController::class, 'acknowledgeAlert'])->middleware('permission:manage network');
+        Route::post('/alerts/{alert}/resolve',     [NocController::class, 'resolveAlert'])->middleware('permission:manage network');
+
+        Route::get('/links',           [NocController::class, 'links'])->middleware('permission:view network');
+        Route::post('/links',          [NocController::class, 'storeLink'])->middleware('permission:manage network');
+        Route::put('/links/{link}',    [NocController::class, 'updateLink'])->middleware('permission:manage network');
+        Route::delete('/links/{link}', [NocController::class, 'destroyLink'])->middleware('permission:manage network');
+    });
+
+    // Network Dashboard — new unified network management API
+    Route::prefix('network')->middleware('permission:view network')->group(function () {
+        Route::get('/dashboard',       [NetworkDashboardController::class, 'overview']);
+        Route::get('/routers',         [NetworkDashboardController::class, 'routers']);
+        Route::get('/routers/{id}',    [NetworkDashboardController::class, 'routerDetail']);
+        Route::get('/sessions',        [NetworkDashboardController::class, 'sessions']);
+        Route::get('/events',          [NetworkDashboardController::class, 'events']);
+        Route::get('/control-logs',    [NetworkDashboardController::class, 'controlLogs']);
+        Route::get('/radius-stats',    [NetworkDashboardController::class, 'radiusStats']);
+
+        // Service management actions
+        Route::prefix('services')->group(function () {
+            Route::get('/{account}/status',  [ServiceNetworkController::class, 'status']);
+            Route::post('/{account}/suspend',  [ServiceNetworkController::class, 'suspend'])->middleware('permission:suspend clients');
+            Route::post('/{account}/restore',  [ServiceNetworkController::class, 'restore'])->middleware('permission:activate clients');
+            Route::post('/{account}/disconnect', [ServiceNetworkController::class, 'disconnect'])->middleware('permission:manage network');
+            Route::post('/{account}/coa',      [ServiceNetworkController::class, 'coa'])->middleware('permission:manage network');
+        });
+    });
+
+    // Fiber / OLT — OLTs, PON ports, ONTs
+    Route::prefix('olts')->middleware('permission:view fiber')->group(function () {
+        Route::get('/',                       [OltController::class, 'index']);
+        Route::post('/',                      [OltController::class, 'store'])->middleware('permission:manage fiber');
+        Route::get('/{olt}',                  [OltController::class, 'show']);
+        Route::put('/{olt}',                  [OltController::class, 'update'])->middleware('permission:manage fiber');
+        Route::delete('/{olt}',               [OltController::class, 'destroy'])->middleware('permission:manage fiber');
+        Route::post('/{olt}/test-connection', [OltController::class, 'testConnection'])->middleware('permission:manage fiber');
+
+        // PON Ports
+        Route::get('/{olt}/pon-ports',        [OltController::class, 'ponPorts']);
+        Route::post('/{olt}/pon-ports',       [OltController::class, 'storePonPort'])->middleware('permission:manage fiber');
+
+        // ONTs
+        Route::get('/{olt}/onts',             [OltController::class, 'onts']);
+        Route::post('/{olt}/onts',            [OltController::class, 'storeOnt'])->middleware('permission:manage fiber');
+        Route::post('/{olt}/poll-signal',     [OltController::class, 'pollSignal'])->middleware('permission:manage fiber');
+        Route::delete('/{olt}/onts/{ont}',    [OltController::class, 'destroyOnt'])->middleware('permission:manage fiber');
+    });
+
+    // ONTs — top-level detail/update
+    Route::get('/onts/{ont}', [OltController::class, 'showOnt'])->middleware('permission:view fiber');
+    Route::put('/onts/{ont}', [OltController::class, 'updateOnt'])->middleware('permission:manage fiber');
+
+    // Fiber infrastructure — routes, splitters, cabinets, distribution points
+    Route::prefix('fiber')->middleware('permission:view fiber')->group(function () {
+        Route::get('/routes',          [FiberController::class, 'routesIndex']);
+        Route::post('/routes',         [FiberController::class, 'routesStore'])->middleware('permission:manage fiber');
+        Route::put('/routes/{fiberRoute}',   [FiberController::class, 'routesUpdate'])->middleware('permission:manage fiber');
+        Route::delete('/routes/{fiberRoute}',[FiberController::class, 'routesDestroy'])->middleware('permission:manage fiber');
+
+        Route::get('/splitters',       [FiberController::class, 'splittersIndex']);
+        Route::post('/splitters',      [FiberController::class, 'splittersStore'])->middleware('permission:manage fiber');
+        Route::delete('/splitters/{fiberSplitter}', [FiberController::class, 'splittersDestroy'])->middleware('permission:manage fiber');
+
+        Route::get('/cabinets',        [FiberController::class, 'cabinetsIndex']);
+        Route::post('/cabinets',       [FiberController::class, 'cabinetsStore'])->middleware('permission:manage fiber');
+        Route::delete('/cabinets/{cabinet}', [FiberController::class, 'cabinetsDestroy'])->middleware('permission:manage fiber');
+
+        Route::get('/distribution-points', [FiberController::class, 'dpsIndex']);
+        Route::post('/distribution-points',[FiberController::class, 'dpsStore'])->middleware('permission:manage fiber');
+        Route::delete('/distribution-points/{distributionPoint}', [FiberController::class, 'dpsDestroy'])->middleware('permission:manage fiber');
     });
 
 });
