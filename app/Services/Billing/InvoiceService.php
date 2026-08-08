@@ -12,7 +12,9 @@ class InvoiceService
 {
     public function __construct(
         protected LedgerService $ledgerService,
-        protected SettingsService $settingsService
+        protected SettingsService $settingsService,
+        protected TaxEngineService $taxEngineService,
+        protected DiscountService $discountService
     ) {}
 
     public function getAllInvoices(Request $request)
@@ -54,12 +56,34 @@ class InvoiceService
     public function createInvoice(array $data, $userId): Invoice
     {
         $data['invoice_number'] = $this->generateInvoiceNumber();
-        $data['tax']            = $data['tax'] ?? $this->calculateTax($data['amount']);
-        $data['total']          = $data['amount'] + $data['tax'];
-        $data['created_by']     = $userId;
-        $data['status']         = $data['status'] ?? 'unpaid';
+
+        // Compute subtotal (amount minus any discount)
+        $amount = (float) ($data['amount'] ?? 0);
+        $discount = (float) ($data['discount'] ?? 0);
+        $subtotal = round(max(0, $amount - $discount), 2);
+
+        $data['discount'] = $discount;
+        $data['subtotal'] = $subtotal;
+        $data['tax']      = 0;
+        $data['total']    = $subtotal;
+        $data['created_by'] = $userId;
+        $data['status']   = $data['status'] ?? 'unpaid';
 
         $invoice = Invoice::create($data);
+
+        // Apply coupon if provided (reduces subtotal before tax)
+        if (!empty($data['coupon_code'])) {
+            $this->discountService->applyCoupon($invoice, $data['coupon_code'], $invoice->client_id);
+            $invoice->refresh();
+        }
+
+        // Apply tax lines across all active rates on the final subtotal
+        $taxBase = (float) $invoice->subtotal;
+        $tax = $this->taxEngineService->applyTaxLines($invoice, $taxBase);
+        $invoice->update([
+            'tax'   => $tax,
+            'total' => round($taxBase + $tax, 2),
+        ]);
 
         // Post debit entry to ledger
         $this->ledgerService->postInvoiceDebit($invoice, $userId);
@@ -72,18 +96,25 @@ class InvoiceService
             'new_values' => $data,
         ]);
 
-        return $invoice->load('client');
+        return $invoice->load('client', 'taxLines', 'discountLines');
     }
 
     public function updateInvoice(Invoice $invoice, array $data, $userId): Invoice
     {
         $oldValues = $invoice->toArray();
 
-        // Recalculate total if amount or tax changed
-        if (isset($data['amount']) || isset($data['tax'])) {
-            $amount        = $data['amount'] ?? $invoice->amount;
-            $tax           = $data['tax']    ?? $invoice->tax;
-            $data['total'] = $amount + $tax;
+        // Recalculate total if amount, discount, or tax changed
+        if (isset($data['amount']) || isset($data['discount']) || isset($data['tax'])) {
+            $amount   = (float) ($data['amount'] ?? $invoice->amount);
+            $discount = (float) ($data['discount'] ?? $invoice->discount);
+            $subtotal = round(max(0, $amount - $discount), 2);
+            $tax      = (float) ($data['tax'] ?? $invoice->tax);
+            $total    = round($subtotal + $tax, 2);
+
+            $data['discount'] = $discount;
+            $data['subtotal'] = $subtotal;
+            $data['tax']      = $tax;
+            $data['total']    = $total;
         }
 
         $invoice->update($data);
@@ -97,7 +128,7 @@ class InvoiceService
             'new_values' => $data,
         ]);
 
-        return $invoice->fresh('client');
+        return $invoice->fresh('client', 'taxLines', 'discountLines');
     }
 
     public function deleteInvoice(Invoice $invoice, $userId): void
@@ -192,14 +223,11 @@ class InvoiceService
         return $count;
     }
 
+    /**
+     * @deprecated Use TaxEngineService::calculateTax() instead.
+     */
     public function calculateTax(float $amount): float
     {
-        $rate = (float) $this->settingsService->get('tax_rate', 0);
-
-        if ($rate <= 0) {
-            return 0;
-        }
-
-        return round($amount * ($rate / 100), 2);
+        return $this->taxEngineService->calculateTax($amount);
     }
 }
