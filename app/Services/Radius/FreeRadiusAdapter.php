@@ -160,8 +160,8 @@ class FreeRadiusAdapter implements RadiusAdapterInterface
 
     protected function buildRateLimit(\App\Models\Plan $plan): string
     {
-        $down = $plan->speed_down ?? 1024;
-        $up   = $plan->speed_up ?? 512;
+        $down = $plan->speed_down ? max(1, (int) $plan->speed_down) : 1024;
+        $up   = $plan->speed_up ? max(1, (int) $plan->speed_up) : 512;
 
         return "{$up}k/{$down}k";
     }

@@ -139,6 +139,7 @@ public function radiusSessions()
         $this->save();
 
         NetworkEvent::create([
+            'tenant_id'         => $this->tenant_id,
             'event_type'        => 'SERVICE_STATE_CHANGED',
             'severity'          => 'info',
             'client_id'         => $this->client_id,

@@ -5,7 +5,7 @@ namespace App\Services\Network;
 use App\Models\ClientAccount;
 use App\Services\Radius\RadiusAdapterInterface;
 
-class StaticIpAccessService implements AccessMethodInterface
+class DhcpAccessService implements AccessMethodInterface
 {
     public function __construct(
         protected RouterAdapterInterface $router,
@@ -18,7 +18,7 @@ class StaticIpAccessService implements AccessMethodInterface
             'username'  => $account->username,
             'password'  => $plainPassword,
             'profile'   => $account->plan->name ?? 'default',
-            'plan_type' => 'static_ip',
+            'plan_type' => 'dhcp',
             'router_id' => $account->plan->router_id ?? null,
         ]);
 

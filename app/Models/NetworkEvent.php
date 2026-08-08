@@ -12,6 +12,7 @@ class NetworkEvent extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'tenant_id',
         'event_type', 'severity',
         'client_id', 'client_account_id', 'nas_id', 'radius_session_id',
         'message', 'context', 'source', 'occurred_at',

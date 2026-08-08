@@ -11,6 +11,8 @@ use App\Services\Network\MikroTikRouterAdapter;
 use App\Services\Network\MockRouterAdapter;
 use App\Services\Network\NetworkEventService;
 use App\Services\Network\PppoeAccessService;
+use App\Services\Network\ProvisioningService;
+use App\Services\Network\RouterAdapterInterface;
 use App\Services\Network\SessionReconciliationService;
 use App\Services\Network\ServiceLifecycleService;
 use App\Services\Network\StaticIpAccessService;
@@ -113,13 +115,11 @@ class AppServiceProvider extends ServiceProvider
 
         // Bind ProvisioningService explicitly with resolved dependencies
         $this->app->singleton(ProvisioningService::class, function ($app) {
-            return new ProvisionService(
+            return new ProvisioningService(
                 $app->make(RouterAdapterInterface::class),
-                $app->make(RadiusAdapterInterface::class),
-                $app->make(AccessMethodManager::class)
+                $app->make(RadiusAdapterInterface::class)
             );
         });
-        $this->app->alias(ProvisioningService::class, 'ProvisioningService');
     }
 
     public function boot(): void

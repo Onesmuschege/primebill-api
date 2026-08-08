@@ -4,8 +4,9 @@ namespace App\Services\Network;
 
 use App\Models\ClientAccount;
 use App\Services\Radius\RadiusAdapterInterface;
+use App\Services\Radius\RadiusControlService;
 
-class StaticIpAccessService implements AccessMethodInterface
+class PppoeAccessService implements AccessMethodInterface
 {
     public function __construct(
         protected RouterAdapterInterface $router,
@@ -18,7 +19,7 @@ class StaticIpAccessService implements AccessMethodInterface
             'username'  => $account->username,
             'password'  => $plainPassword,
             'profile'   => $account->plan->name ?? 'default',
-            'plan_type' => 'static_ip',
+            'plan_type' => $account->plan->type ?? 'pppoe',
             'router_id' => $account->plan->router_id ?? null,
         ]);
 
@@ -44,9 +45,15 @@ class StaticIpAccessService implements AccessMethodInterface
             && $this->radius->unsuspendUser($account->username);
     }
 
+    public function disconnectSession(ClientAccount $account, ?string $sessionId = null): bool
+    {
+        return $this->router->deleteUser($account->username);
+    }
+
     public function restore(ClientAccount $account): bool
     {
-        return $this->activate($account);
+        return $this->router->unsuspendUser($account->username)
+            && $this->radius->unsuspendUser($account->username);
     }
 
     public function deprovision(ClientAccount $account): bool
@@ -57,12 +64,8 @@ class StaticIpAccessService implements AccessMethodInterface
 
     public function applyBandwidthPolicy(ClientAccount $account, array $policy): bool
     {
+        // CoA not fully implemented yet.
         return true;
-    }
-
-    public function disconnectSession(ClientAccount $account, ?string $sessionId = null): bool
-    {
-        return $this->router->deleteUser($account->username);
     }
 
     protected function buildRateLimit(ClientAccount $account): string

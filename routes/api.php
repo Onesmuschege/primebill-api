@@ -60,6 +60,7 @@ use App\Http\Controllers\Api\LoginHistoryController;
 use App\Http\Controllers\Api\NetworkDashboardController;
 use App\Http\Controllers\Api\ServiceNetworkController;
 use App\Http\Controllers\Api\SessionController;
+use App\Http\Controllers\Api\IncidentController;
 
 // ─── ISP self-registration (this is how a new tenant signs up for PrimeBill itself) ──
 Route::prefix('tenants')->group(function () {
@@ -607,6 +608,20 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
             Route::post('/{account}/disconnect', [ServiceNetworkController::class, 'disconnect'])->middleware('permission:manage network');
             Route::post('/{account}/coa',      [ServiceNetworkController::class, 'coa'])->middleware('permission:manage network');
         });
+    });
+
+    // Incidents / Outage Management
+    Route::prefix('incidents')->middleware('permission:view incidents')->group(function () {
+        Route::get('/stats', [IncidentController::class, 'stats']);
+        Route::get('/',     [IncidentController::class, 'index']);
+        Route::post('/',    [IncidentController::class, 'store'])->middleware('permission:create incidents');
+        Route::get('/{incident}', [IncidentController::class, 'show']);
+        Route::put('/{incident}', [IncidentController::class, 'update'])->middleware('permission:edit incidents');
+        Route::delete('/{incident}', [IncidentController::class, 'destroy'])->middleware('permission:delete incidents');
+        Route::post('/{incident}/acknowledge', [IncidentController::class, 'acknowledge'])->middleware('permission:edit incidents');
+        Route::post('/{incident}/status', [IncidentController::class, 'updateStatus'])->middleware('permission:edit incidents');
+        Route::post('/{incident}/resolve', [IncidentController::class, 'resolve'])->middleware('permission:edit incidents');
+        Route::post('/{incident}/close', [IncidentController::class, 'close'])->middleware('permission:edit incidents');
     });
 
     // Fiber / OLT — OLTs, PON ports, ONTs
