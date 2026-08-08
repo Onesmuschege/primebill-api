@@ -259,12 +259,36 @@ class RolesAndPermissionsSeeder extends Seeder
             'view settings',
             'edit settings',
 
-            /*
+/*
             |--------------------------------------------------------------------------
             | Logs
             |--------------------------------------------------------------------------
             */
             'view logs',
+
+/*
+            |--------------------------------------------------------------------------
+            | IPAM
+            |--------------------------------------------------------------------------
+            */
+            'view ipam',
+            'manage ipam',
+
+/*
+            |--------------------------------------------------------------------------
+            | Network Operations Center (NOC)
+            |--------------------------------------------------------------------------
+            */
+            'view network',
+            'manage network',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Fiber / OLT
+            |--------------------------------------------------------------------------
+            */
+            'view fiber',
+            'manage fiber',
         ];
 
         /*
@@ -418,8 +442,20 @@ class RolesAndPermissionsSeeder extends Seeder
             'view settings',
             'edit settings',
 
-            // Logs
+// Logs
             'view logs',
+
+            // IPAM
+            'view ipam',
+            'manage ipam',
+
+// NOC
+            'view network',
+            'manage network',
+
+            // Fiber / OLT
+            'view fiber',
+            'manage fiber',
         ]);
 
         /*
@@ -483,11 +519,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'view sms',
             'send sms',
 
-            // Reports
+// Reports
             'view reports',
 
             // Inventory
             'view inventory',
+
+            // NOC (view-only for staff)
+            'view network',
         ]);
 
         /*
