@@ -16,6 +16,7 @@ class Client extends Authenticatable
     protected string $auditAlias = 'Client';
 
     protected $fillable = [
+        'tenant_id',
         'first_name', 'last_name', 'email', 'phone',
         'id_number', 'address', 'county', 'town',
         'gps_lat', 'gps_lng', 'status', 'created_by',
@@ -36,6 +37,31 @@ class Client extends Authenticatable
     public function payments()
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    public function creditNotes()
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
+    public function debitNotes()
+    {
+        return $this->hasMany(DebitNote::class);
+    }
+
+    public function refunds()
+    {
+        return $this->hasMany(Refund::class);
+    }
+
+    public function paymentPlans()
+    {
+        return $this->hasMany(PaymentPlan::class);
     }
 
     public function tickets()
