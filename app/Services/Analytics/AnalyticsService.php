@@ -41,15 +41,14 @@ class AnalyticsService
             ]);
         }
 
-        $payments = Payment::selectRaw("
-                TO_CHAR(created_at, 'YYYY-MM') as ym,
-                SUM(amount) as total
-            ")
-            ->where('status', 'completed')
+        // DB-agnostic: fetch all completed payments in the window and group
+        // by month in PHP. Avoids TO_CHAR (PostgreSQL-only) which breaks
+        // SQLite test runs.
+        $payments = Payment::where('status', 'completed')
             ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
-            ->groupBy('ym')
-            ->get()
-            ->keyBy('ym');
+            ->get(['created_at', 'amount'])
+            ->groupBy(fn ($p) => $p->created_at->format('Y-m'))
+            ->map(fn ($group) => (object) ['total' => $group->sum('amount')]);
 
         return $months->map(function ($month) use ($payments) {
 
@@ -84,14 +83,12 @@ class AnalyticsService
             ]);
         }
 
-        $clients = Client::selectRaw("
-                TO_CHAR(created_at, 'YYYY-MM') as ym,
-                COUNT(*) as total
-            ")
-            ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
-            ->groupBy('ym')
-            ->get()
-            ->keyBy('ym');
+        // DB-agnostic: fetch all clients in the window and group by month
+        // in PHP. Avoids TO_CHAR (PostgreSQL-only) which breaks SQLite tests.
+        $clients = Client::where('created_at', '>=', now()->subMonths(11)->startOfMonth())
+            ->get(['created_at'])
+            ->groupBy(fn ($c) => $c->created_at->format('Y-m'))
+            ->map(fn ($group) => (object) ['total' => $group->count()]);
 
         return $months->map(function ($month) use ($clients) {
 

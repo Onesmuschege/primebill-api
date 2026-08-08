@@ -26,11 +26,11 @@ class TicketEscalateController extends Controller
 
         // Log escalation
         \App\Models\SystemLog::create([
-            'action' => 'ticket.escalated',
-            'entity_type' => 'Ticket',
-            'entity_id' => $ticket->id,
-            'description' => "Ticket #{$ticket->id} escalated to critical priority",
-            'user_id' => $request->user()->id,
+            'action'     => 'ticket.escalated',
+            'model'      => 'Ticket',
+            'model_id'   => $ticket->id,
+            'new_values' => ['priority' => 'critical'],
+            'user_id'    => $request->user()->id,
         ]);
 
         return response()->json([

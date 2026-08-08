@@ -9,6 +9,7 @@ use App\Models\Voucher;
 use App\Services\Network\ProvisioningService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class VoucherController extends Controller
 {
@@ -157,7 +158,7 @@ class VoucherController extends Controller
                     'client_id'    => $client->id,
                     'plan_id'      => $voucher->plan_id,
                     'username'     => $request->username,
-                    'password'     => $plainPassword,
+                    'password'     => Hash::make($plainPassword),
                     'type'         => 'prepaid',
                     'status'       => 'active',
                     'expiry_date'  => now()->addDays($voucher->plan->validity_days ?? 1),

@@ -251,7 +251,7 @@ class CustomerSubscriptionController extends Controller
         $subscriptions = CustomerSubscription::with(['product', 'plan'])
             ->where('client_id', $client->id)
             ->active()
-            ->get();
+            ->paginate(15);
 
         return $this->success($subscriptions);
     }
@@ -269,7 +269,7 @@ class CustomerSubscriptionController extends Controller
         $subscriptions = CustomerSubscription::with(['product', 'plan'])
             ->where('client_id', $client->id)
             ->expiringSoon()
-            ->get();
+            ->paginate(15);
 
         return $this->success($subscriptions);
     }

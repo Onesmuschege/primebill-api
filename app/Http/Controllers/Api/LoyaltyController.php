@@ -9,6 +9,41 @@ use Illuminate\Http\Request;
 
 class LoyaltyController extends Controller
 {
+    // GET /api/loyalty/points/{clientId}
+    public function getPoints($clientId)
+    {
+        $client = Client::findOrFail($clientId);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'balance' => $client->loyalty_points_balance,
+                'referral_code' => $client->referral_code,
+            ],
+        ]);
+    }
+
+    // GET /api/loyalty/transactions
+    public function transactions(Request $request)
+    {
+        $query = LoyaltyPoint::with('client:id,first_name,last_name');
+
+        if ($request->filled('client_id')) {
+            $query->where('client_id', $request->client_id);
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $history = $query->latest()->paginate($request->per_page ?? 30);
+
+        return response()->json([
+            'success' => true,
+            'data' => $history,
+        ]);
+    }
+
     // GET /api/loyalty/{client}
     public function show(Client $client)
     {
@@ -54,13 +89,16 @@ class LoyaltyController extends Controller
         ]);
     }
 
-    // POST /api/loyalty/{client}/redeem
-    public function redeem(Request $request, Client $client)
+    // POST /api/loyalty/redeem
+    public function redeem(Request $request)
     {
         $request->validate([
+            'client_id'  => 'required|exists:clients,id',
             'points'     => 'required|integer|min:100',
             'invoice_id' => 'required|exists:invoices,id',
         ]);
+
+        $client = Client::findOrFail($request->client_id);
 
         // 1 point = Ksh 0.10 → 100 points = Ksh 10 minimum redemption
         $kesValue = $request->points * 0.10;

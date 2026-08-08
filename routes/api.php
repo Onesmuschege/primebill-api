@@ -244,6 +244,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // RADIUS
     Route::prefix('radius')->middleware('permission:view radius')->group(function () {
+        Route::get('/stats',    [RadiusController::class, 'stats']);
         Route::get('/sessions', [RadiusController::class, 'sessions']);
         Route::post('/sync',    [RadiusController::class, 'sync'])->middleware('permission:sync radius');
     });

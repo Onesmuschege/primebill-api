@@ -46,4 +46,17 @@ return [
 
     'provisioning_queue' => env('PROVISIONING_QUEUE', 'default'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | RADIUS Accounting Webhook Secret
+    |--------------------------------------------------------------------------
+    |
+    | Shared secret that FreeRADIUS must send in the X-RADIUS-SECRET header
+    | when POSTing accounting data to /api/webhooks/radius/accounting.
+    | If empty, the webhook rejects all requests (fail-closed).
+    |
+    */
+
+    'radius_webhook_secret' => env('RADIUS_WEBHOOK_SECRET', ''),
+
 ];

@@ -175,6 +175,30 @@ class MikroTikService
         }
     }
 
+    public function disableHotspotUser(string $username): bool
+    {
+        try {
+            $query = new Query('/ip/hotspot/user/disable');
+            $query->equal('.id', $this->getHotspotUserId($username));
+            $this->client->query($query)->read();
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public function enableHotspotUser(string $username): bool
+    {
+        try {
+            $query = new Query('/ip/hotspot/user/enable');
+            $query->equal('.id', $this->getHotspotUserId($username));
+            $this->client->query($query)->read();
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
     private function getPPPoEUserId(string $username): string
     {
         $query = new Query('/ppp/secret/print');

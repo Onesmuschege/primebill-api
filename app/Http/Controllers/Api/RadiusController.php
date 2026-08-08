@@ -41,4 +41,21 @@ class RadiusController extends Controller
             'data'    => $sessions,
         ]);
     }
+
+    // GET /api/radius/stats
+    public function stats()
+    {
+        $activeSessions = RadiusSession::where('status', 'active')->count();
+        $totalSessions  = RadiusSession::count();
+        $uniqueUsers    = RadiusSession::distinct('username')->count('username');
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'active_sessions' => $activeSessions,
+                'total_sessions'  => $totalSessions,
+                'unique_users'    => $uniqueUsers,
+            ],
+        ]);
+    }
 }
