@@ -43,6 +43,29 @@ class AuditService
     public const CATEGORY_SYSTEM = 'system';
 
     /**
+     * Keys whose values are masked in audit log old/new values before they
+     * are persisted — never store raw secrets in the audit trail.
+     */
+    private const SENSITIVE_KEYS = [
+        'password',
+        'password_confirmation',
+        'current_password',
+        'new_password',
+        'api_key',
+        'api_secret',
+        'secret',
+        'token',
+        'key_hash',
+        'key_secret',
+        'mpesa_passkey',
+        'consumer_secret',
+        'private_key',
+        'auth_token',
+        'mfa_secret',
+        'mfa_backup_codes',
+    ];
+
+    /**
      * Log an audit event
      */
     public function log(
@@ -66,12 +89,76 @@ class AuditService
             'action'      => $action,
             'model'       => $model,
             'model_id'    => $modelId,
-            'old_values'  => !empty($oldValues) ? $oldValues : null,
-            'new_values'  => !empty($newValues) ? $newValues : null,
+            'old_values'  => !empty($oldValues) ? $this->maskSensitiveData($oldValues) : null,
+            'new_values'  => !empty($newValues) ? $this->maskSensitiveData($newValues) : null,
             'ip_address'  => $attributes['ip_address'] ?? $request->ip(),
             'user_agent'  => $attributes['user_agent'] ?? $request->userAgent(),
             'request_id'  => $attributes['request_id'] ?? ($request->header('X-Request-ID') ?? Str::uuid()->toString()),
         ]);
+    }
+
+    /**
+     * Recursively mask values whose keys appear in the sensitive list.
+     * Nested arrays (e.g. a changeset with 'from'/'to' pairs) are handled
+     * by recursing into the value while preserving the structure.
+     */
+    private function maskSensitiveData(array $data): array
+    {
+        $masked = [];
+
+        foreach ($data as $key => $value) {
+            // Mask based on the direct key match first.
+            if (is_string($key) && in_array(strtolower($key), self::SENSITIVE_KEYS, true)) {
+                $masked[$key] = '********';
+                continue;
+            }
+
+            if (is_array($value)) {
+                $masked[$key] = $this->maskSensitiveData($value);
+                continue;
+            }
+
+            // Heuristic: mask anything that looks like a secret even when the
+            // key isn't in the list (e.g. 'credentials' => 'abc123...').
+            if (is_string($value) && $this->looksLikeSecret($key, $value)) {
+                $masked[$key] = '********';
+                continue;
+            }
+
+            $masked[$key] = $value;
+        }
+
+        return $masked;
+    }
+
+    /**
+     * Heuristic for secret-like values: long high-entropy strings, JWTs,
+     * base64 payloads, or values under secret-ish keys.
+     */
+    private function looksLikeSecret($key, string $value): bool
+    {
+        $keyLower = is_string($key) ? strtolower($key) : '';
+
+        $secretishKey = str_contains($keyLower, 'secret')
+            || str_contains($keyLower, 'password')
+            || str_contains($keyLower, 'token')
+            || str_contains($keyLower, 'key');
+
+        if ($secretishKey) {
+            return true;
+        }
+
+        // JWT pattern: header.payload.signature
+        if (preg_match('/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/', $value)) {
+            return true;
+        }
+
+        // Long random-looking base64
+        if (strlen($value) >= 20 && preg_match('/^[A-Za-z0-9+\/=_-]+$/', $value)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
