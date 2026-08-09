@@ -68,7 +68,7 @@ class PortalRegisterController extends Controller
             return compact('client', 'account');
         });
 
-        ProvisionClientAccountJob::dispatch($result['account']->id, $plainPassword);
+ProvisionClientAccountJob::dispatch($result['account']->id, $plainPassword, $result['account']->tenant_id);
 
         SystemLog::create([
             'action'     => 'portal self-registration',
