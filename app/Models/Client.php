@@ -39,6 +39,11 @@ class Client extends Authenticatable
         return $this->hasMany(Payment::class);
     }
 
+    public function paymentAllocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
     public function wallet()
     {
         return $this->hasOne(Wallet::class);

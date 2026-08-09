@@ -38,6 +38,8 @@ protected $fillable = [
         'mfa_secret',
         'mfa_backup_codes',
         'mfa_enabled_at',
+        'mfa_recovery_attempts',
+        'mfa_recovery_locked_until',
         // Per-user allowed-IP allowlist (nullable JSON array), enforced by
         // the IpRestriction middleware on sensitive routes.
         'allowed_ips',
@@ -58,6 +60,7 @@ protected $fillable = [
             'is_platform_admin' => 'boolean',
             'mfa_enabled' => 'boolean',
             'mfa_enabled_at' => 'datetime',
+            'mfa_recovery_locked_until' => 'datetime',
             'allowed_ips' => 'array',
         ];
     }

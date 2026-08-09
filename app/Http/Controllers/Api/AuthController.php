@@ -27,12 +27,16 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        // Credential-based login must always use the session/web guard.
+        // Relying on the default guard is unsafe because Sanctum replaces
+        // the default with a token RequestGuard whenever a Bearer header is
+        // present, and RequestGuard does not implement attempt().
+        if (!Auth::guard('web')->attempt($request->only('email', 'password'))) {
             $this->loginHistoryService->recordFailedLogin($request->email, $request, 'Invalid credentials');
             return $this->error('Invalid credentials', null, 401);
         }
 
-        $user  = Auth::user();
+        $user  = Auth::guard('web')->user();
 
         // If the user has MFA enabled, do NOT issue a full session token yet.
         // Return a short-lived `mfa_token` that the frontend uses to call

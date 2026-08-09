@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\RouterController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PaymentAllocationController;
+use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\MpesaController;
 use App\Http\Controllers\Api\SmsController;
 use App\Http\Controllers\Api\TicketController;
@@ -61,6 +63,18 @@ use App\Http\Controllers\Api\NetworkDashboardController;
 use App\Http\Controllers\Api\ServiceNetworkController;
 use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\IncidentController;
+use App\Http\Controllers\Api\ServiceManagementController;
+use App\Http\Controllers\Api\CustomerEquipmentController;
+use App\Http\Controllers\Api\RouterConfigurationController;
+use App\Http\Controllers\Api\RadiusAdvancedController;
+use App\Http\Controllers\Api\FiberExtensionController;
+use App\Http\Controllers\Api\InventoryManagementController;
+use App\Http\Controllers\Api\SupportCatalogController;
+use App\Http\Controllers\Api\CommunicationsController;
+use App\Http\Controllers\Api\CustomerExperienceController;
+use App\Http\Controllers\Api\SecurityAdminController;
+use App\Http\Controllers\Api\FieldOperationsController;
+use App\Http\Controllers\Api\ReportingToolsController;
 
 // ─── ISP self-registration (this is how a new tenant signs up for PrimeBill itself) ──
 Route::prefix('tenants')->group(function () {
@@ -322,6 +336,53 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::post('/',                 [PaymentController::class, 'store'])->middleware('permission:create payments');
         Route::get('/{payment}',         [PaymentController::class, 'show']);
         Route::delete('/{payment}',      [PaymentController::class, 'destroy'])->middleware('permission:delete payments');
+    });
+
+    // Payment Allocations — split one payment across multiple invoices
+    Route::prefix('payment-allocations')->middleware('permission:view payments')->group(function () {
+        Route::get('/',                            [PaymentAllocationController::class, 'index']);
+        Route::post('/',                           [PaymentAllocationController::class, 'store'])->middleware('permission:create payments');
+        Route::get('/{allocation}',                [PaymentAllocationController::class, 'show']);
+        Route::post('/{allocation}/reverse',       [PaymentAllocationController::class, 'reverse'])->middleware('permission:create payments');
+    });
+
+    // Advanced Billing / Finance — wallets, credit/debit notes, refunds,
+    // payment plans, financial statements, usage billing
+    Route::prefix('finance')->middleware('permission:view finance')->group(function () {
+        // Wallets
+        Route::get('/wallet/balance',                [FinanceController::class, 'walletBalance']);
+        Route::get('/wallet/transactions',           [FinanceController::class, 'walletTransactions']);
+        Route::post('/wallet/deposit',               [FinanceController::class, 'walletDeposit'])->middleware('permission:create payments');
+        Route::post('/wallet/withdraw',              [FinanceController::class, 'walletWithdraw'])->middleware('permission:create payments');
+
+        // Credit Notes
+        Route::get('/credit-notes',                  [FinanceController::class, 'creditNotesIndex']);
+        Route::post('/credit-notes',                 [FinanceController::class, 'creditNoteStore'])->middleware('permission:create invoices');
+        Route::post('/credit-notes/{creditNote}/reverse', [FinanceController::class, 'creditNoteReverse'])->middleware('permission:create invoices');
+
+        // Debit Notes
+        Route::get('/debit-notes',                   [FinanceController::class, 'debitNotesIndex']);
+        Route::post('/debit-notes',                  [FinanceController::class, 'debitNoteStore'])->middleware('permission:create invoices');
+        Route::post('/debit-notes/{debitNote}/reverse', [FinanceController::class, 'debitNoteReverse'])->middleware('permission:create invoices');
+
+        // Refunds
+        Route::get('/refunds',                       [FinanceController::class, 'refundsIndex']);
+        Route::post('/refunds',                      [FinanceController::class, 'refundStore'])->middleware('permission:create payments');
+        Route::post('/refunds/{refund}/reverse',     [FinanceController::class, 'refundReverse'])->middleware('permission:create payments');
+
+        // Payment Plans
+        Route::get('/payment-plans',                 [FinanceController::class, 'paymentPlansIndex']);
+        Route::post('/payment-plans',                [FinanceController::class, 'paymentPlanStore'])->middleware('permission:create invoices');
+        Route::post('/installments/{installment}/pay', [FinanceController::class, 'paymentPlanRecordPayment'])->middleware('permission:create payments');
+
+        // Financial Statements
+        Route::get('/statement/trial-balance',       [FinanceController::class, 'trialBalance']);
+        Route::get('/statement/revenue',             [FinanceController::class, 'revenueRecognition']);
+        Route::get('/statement/verify-ledger',       [FinanceController::class, 'verifyLedger']);
+
+        // Usage Billing
+        Route::get('/usage/compute',                 [FinanceController::class, 'usageCompute']);
+        Route::post('/usage/record',                 [FinanceController::class, 'usageRecord'])->middleware('permission:create invoices');
     });
 
     // M-Pesa (protected)
@@ -667,9 +728,108 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::post('/distribution-points',[FiberController::class, 'dpsStore'])->middleware('permission:manage fiber');
         Route::delete('/distribution-points/{distributionPoint}', [FiberController::class, 'dpsDestroy'])->middleware('permission:manage fiber');
     });
+// ─── Reconciliation catalog domains (wired Phase D) ──────────────────────
+    // Each group exposes uniform REST over a `{resource}/{id}` surface backed
+    // by the HandlesCatalogResources trait. `{resource}` is whitelisted in the
+    // controller (unknown segments 404) and every model is tenant-scoped via
+    // its BelongsToTenant trait.
+    Route::prefix('service-catalog')->middleware('permission:view service-catalog')->group(function () {
+        Route::get('/{resource}',           [ServiceManagementController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [ServiceManagementController::class, 'catalogStore'])->middleware('permission:manage service-catalog');
+        Route::get('/{resource}/{id}',      [ServiceManagementController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [ServiceManagementController::class, 'catalogUpdate'])->middleware('permission:manage service-catalog');
+        Route::delete('/{resource}/{id}',   [ServiceManagementController::class, 'catalogDestroy'])->middleware('permission:manage service-catalog');
+    });
+
+    Route::prefix('equipment')->middleware('permission:view equipment')->group(function () {
+        Route::get('/{resource}',           [CustomerEquipmentController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [CustomerEquipmentController::class, 'catalogStore'])->middleware('permission:manage equipment');
+        Route::get('/{resource}/{id}',      [CustomerEquipmentController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [CustomerEquipmentController::class, 'catalogUpdate'])->middleware('permission:manage equipment');
+        Route::delete('/{resource}/{id}',   [CustomerEquipmentController::class, 'catalogDestroy'])->middleware('permission:manage equipment');
+    });
+
+    Route::prefix('router-config')->middleware('permission:view router-config')->group(function () {
+        Route::get('/{resource}',           [RouterConfigurationController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [RouterConfigurationController::class, 'catalogStore'])->middleware('permission:manage router-config');
+        Route::get('/{resource}/{id}',      [RouterConfigurationController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [RouterConfigurationController::class, 'catalogUpdate'])->middleware('permission:manage router-config');
+        Route::delete('/{resource}/{id}',   [RouterConfigurationController::class, 'catalogDestroy'])->middleware('permission:manage router-config');
+    });
+
+    Route::prefix('radius-advanced')->middleware('permission:view radius-advanced')->group(function () {
+        Route::get('/{resource}',           [RadiusAdvancedController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [RadiusAdvancedController::class, 'catalogStore'])->middleware('permission:manage radius-advanced');
+        Route::get('/{resource}/{id}',      [RadiusAdvancedController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [RadiusAdvancedController::class, 'catalogUpdate'])->middleware('permission:manage radius-advanced');
+        Route::delete('/{resource}/{id}',   [RadiusAdvancedController::class, 'catalogDestroy'])->middleware('permission:manage radius-advanced');
+    });
+
+    Route::prefix('fiber-ext')->middleware('permission:view fiber-ext')->group(function () {
+        Route::get('/{resource}',           [FiberExtensionController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [FiberExtensionController::class, 'catalogStore'])->middleware('permission:manage fiber-ext');
+        Route::get('/{resource}/{id}',      [FiberExtensionController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [FiberExtensionController::class, 'catalogUpdate'])->middleware('permission:manage fiber-ext');
+        Route::delete('/{resource}/{id}',   [FiberExtensionController::class, 'catalogDestroy'])->middleware('permission:manage fiber-ext');
+    });
+Route::prefix('inventory-ext')->middleware('permission:view inventory-ext')->group(function () {
+        Route::get('/{resource}',           [InventoryManagementController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [InventoryManagementController::class, 'catalogStore'])->middleware('permission:manage inventory-ext');
+        Route::get('/{resource}/{id}',      [InventoryManagementController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [InventoryManagementController::class, 'catalogUpdate'])->middleware('permission:manage inventory-ext');
+        Route::delete('/{resource}/{id}',   [InventoryManagementController::class, 'catalogDestroy'])->middleware('permission:manage inventory-ext');
+    });
+
+    Route::prefix('support-catalog')->middleware('permission:view support-catalog')->group(function () {
+        Route::get('/{resource}',           [SupportCatalogController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [SupportCatalogController::class, 'catalogStore'])->middleware('permission:manage support-catalog');
+        Route::get('/{resource}/{id}',      [SupportCatalogController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [SupportCatalogController::class, 'catalogUpdate'])->middleware('permission:manage support-catalog');
+        Route::delete('/{resource}/{id}',   [SupportCatalogController::class, 'catalogDestroy'])->middleware('permission:manage support-catalog');
+    });
+
+    Route::prefix('communications')->middleware('permission:view communications')->group(function () {
+        Route::post('/campaigns/{id}/transition', [CommunicationsController::class, 'transitionCampaign'])->middleware('permission:manage communications');
+        Route::get('/{resource}',           [CommunicationsController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [CommunicationsController::class, 'catalogStore'])->middleware('permission:manage communications');
+        Route::get('/{resource}/{id}',      [CommunicationsController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [CommunicationsController::class, 'catalogUpdate'])->middleware('permission:manage communications');
+        Route::delete('/{resource}/{id}',   [CommunicationsController::class, 'catalogDestroy'])->middleware('permission:manage communications');
+    });
+
+    Route::prefix('customer-experience')->middleware('permission:view customer-experience')->group(function () {
+        Route::get('/{resource}',           [CustomerExperienceController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [CustomerExperienceController::class, 'catalogStore'])->middleware('permission:manage customer-experience');
+        Route::get('/{resource}/{id}',      [CustomerExperienceController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [CustomerExperienceController::class, 'catalogUpdate'])->middleware('permission:manage customer-experience');
+        Route::delete('/{resource}/{id}',   [CustomerExperienceController::class, 'catalogDestroy'])->middleware('permission:manage customer-experience');
+    });
+
+    Route::prefix('security-admin')->middleware('permission:view security-admin')->group(function () {
+        Route::get('/{resource}',           [SecurityAdminController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [SecurityAdminController::class, 'catalogStore'])->middleware('permission:manage security-admin');
+        Route::get('/{resource}/{id}',      [SecurityAdminController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [SecurityAdminController::class, 'catalogUpdate'])->middleware('permission:manage security-admin');
+        Route::delete('/{resource}/{id}',   [SecurityAdminController::class, 'catalogDestroy'])->middleware('permission:manage security-admin');
+    });
+
+    Route::prefix('field-ops')->middleware('permission:view field-ops')->group(function () {
+        Route::get('/{resource}',           [FieldOperationsController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [FieldOperationsController::class, 'catalogStore'])->middleware('permission:manage field-ops');
+        Route::get('/{resource}/{id}',      [FieldOperationsController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [FieldOperationsController::class, 'catalogUpdate'])->middleware('permission:manage field-ops');
+        Route::delete('/{resource}/{id}',   [FieldOperationsController::class, 'catalogDestroy'])->middleware('permission:manage field-ops');
+    });
+
+    Route::prefix('reporting')->middleware('permission:view reporting')->group(function () {
+        Route::get('/{resource}',           [ReportingToolsController::class, 'catalogIndex']);
+        Route::post('/{resource}',          [ReportingToolsController::class, 'catalogStore'])->middleware('permission:manage reporting');
+        Route::get('/{resource}/{id}',      [ReportingToolsController::class, 'catalogShow']);
+        Route::put('/{resource}/{id}',      [ReportingToolsController::class, 'catalogUpdate'])->middleware('permission:manage reporting');
+        Route::delete('/{resource}/{id}',   [ReportingToolsController::class, 'catalogDestroy'])->middleware('permission:manage reporting');
+    });
 
 });
-
 // ─── Platform-admin routes (PrimeBill's own cross-tenant operator view) ──────
 // Deliberately its own top-level group — NOT nested inside the block above,
 // since that block carries the 'tenant' middleware and these routes must

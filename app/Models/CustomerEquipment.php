@@ -11,6 +11,8 @@ class CustomerEquipment extends Model
 {
     use BelongsToTenant;
 
+    protected $table = 'customer_equipment';
+
     protected $fillable = [
         'tenant_id',
         'client_id',

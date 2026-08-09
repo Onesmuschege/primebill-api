@@ -110,7 +110,7 @@ class MfaController extends Controller
         $code = $request->input('code');
 
         $verified = $this->mfaService->verifyCode($user, $code)
-            || $this->mfaService->verifyBackupCode($user, $code);
+            || $this->mfaService->verifyRecoveryCode($user, $code);
 
         if (!$verified) {
             SystemLog::create([
@@ -175,7 +175,7 @@ class MfaController extends Controller
         }
 
         $verified = $this->mfaService->verifyCode($user, $code)
-            || $this->mfaService->verifyBackupCode($user, $code);
+            || $this->mfaService->verifyRecoveryCode($user, $code);
 
         if (!$verified) {
             SystemLog::create([
@@ -250,9 +250,9 @@ class MfaController extends Controller
             return response()->json(['message' => 'Invalid verification code'], 422);
         }
 
-        $backupCodes = $this->mfaService->generateBackupCodes();
-        $user->mfa_backup_codes = encrypt(json_encode($backupCodes));
-        $user->save();
+        // Regeneration invalidates all previous codes atomically before
+        // issuing the new set — old codes can never be used again.
+        $backupCodes = $this->mfaService->regenerateRecoveryCodes($user);
 
         SystemLog::create([
             'user_id' => $user->id,

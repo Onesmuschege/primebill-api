@@ -167,6 +167,14 @@ class RolesAndPermissionsSeeder extends Seeder
 
             /*
             |--------------------------------------------------------------------------
+            | Payment Allocations
+            |--------------------------------------------------------------------------
+            */
+            'view payment-allocations',
+            'create payment-allocations',
+
+            /*
+            |--------------------------------------------------------------------------
             | Tickets
             |--------------------------------------------------------------------------
             */
@@ -289,6 +297,36 @@ class RolesAndPermissionsSeeder extends Seeder
             */
             'view fiber',
             'manage fiber',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Reconciliation catalog domains (Phase D)
+            |--------------------------------------------------------------------------
+            */
+            'view service-catalog',
+            'manage service-catalog',
+            'view equipment',
+            'manage equipment',
+            'view router-config',
+            'manage router-config',
+            'view radius-advanced',
+            'manage radius-advanced',
+            'view fiber-ext',
+            'manage fiber-ext',
+            'view inventory-ext',
+            'manage inventory-ext',
+            'view support-catalog',
+            'manage support-catalog',
+            'view communications',
+            'manage communications',
+            'view customer-experience',
+            'manage customer-experience',
+            'view security-admin',
+            'manage security-admin',
+            'view field-ops',
+            'manage field-ops',
+            'view reporting',
+            'manage reporting',
         ];
 
         /*
@@ -389,6 +427,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'create payments',
             'delete payments',
 
+            // Payment Allocations
+            'view payment-allocations',
+            'create payment-allocations',
+
             // Tickets
             'view tickets',
             'create tickets',
@@ -456,6 +498,32 @@ class RolesAndPermissionsSeeder extends Seeder
             // Fiber / OLT
             'view fiber',
             'manage fiber',
+
+            // Reconciliation catalog domains (Phase D)
+            'view service-catalog',
+            'manage service-catalog',
+            'view equipment',
+            'manage equipment',
+            'view router-config',
+            'manage router-config',
+            'view radius-advanced',
+            'manage radius-advanced',
+            'view fiber-ext',
+            'manage fiber-ext',
+            'view inventory-ext',
+            'manage inventory-ext',
+            'view support-catalog',
+            'manage support-catalog',
+            'view communications',
+            'manage communications',
+            'view customer-experience',
+            'manage customer-experience',
+            'view security-admin',
+            'manage security-admin',
+            'view field-ops',
+            'manage field-ops',
+            'view reporting',
+            'manage reporting',
         ]);
 
         /*

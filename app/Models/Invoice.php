@@ -45,6 +45,11 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function allocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
     public function taxLines()
     {
         return $this->hasMany(InvoiceTaxLine::class);
