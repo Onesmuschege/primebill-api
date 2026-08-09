@@ -913,6 +913,9 @@ Route::prefix('platform')->middleware(['auth:sanctum', 'platform_admin'])->group
     // Admin User Management
     Route::post('/tenants/{tenant}/admin',      [PlatformAdminController::class, 'createAdmin']);
 
+    // Audit Log
+    Route::get('/audit-log',                    [PlatformAdminController::class, 'auditLog']);
+
     // Subscription Management
     Route::get('/subscriptions',           [PlatformSubscriptionController::class, 'index']);
     Route::get('/subscription-stats',      [PlatformSubscriptionController::class, 'stats']);
