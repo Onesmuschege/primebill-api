@@ -4,59 +4,67 @@ namespace Database\Seeders;
 
 use App\Models\ClientAccount;
 use App\Models\RadiusSession;
+use App\Models\Tenant;
+use Database\Seeders\Traits\SeedsForTenant;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class RadiusSessionSeeder extends Seeder
 {
+    use SeedsForTenant;
+
     public function run(): void
     {
-        $accounts = ClientAccount::where('status', 'active')->get();
+        $this->forEachTenant(function (Tenant $tenant) {
+            $accounts = ClientAccount::where('tenant_id', $tenant->id)
+                ->where('status', 'active')
+                ->get();
 
-        if ($accounts->isEmpty()) {
-            $this->command->warn('No active ClientAccounts found — skipping RadiusSessionSeeder.');
-            return;
-        }
+            if ($accounts->isEmpty()) {
+                $this->command->warn("RadiusSessionSeeder [{$tenant->slug}]: No active ClientAccounts - skipping.");
+                return;
+            }
 
-        // ~35% of active accounts currently online — gives the dashboard
-        // realistic "Active Users" / "Top Downloaders" numbers instead of 0.
-        $onlineCount = max(1, (int) ceil($accounts->count() * 0.35));
-        $onlineAccounts = $accounts->random(min($onlineCount, $accounts->count()));
+            // ~35% of active accounts currently online
+            $onlineCount = max(1, (int) ceil($accounts->count() * 0.35));
+            $onlineAccounts = $accounts->random(min($onlineCount, $accounts->count()));
 
-        foreach ($onlineAccounts as $account) {
-            RadiusSession::create([
-                'username'          => $account->username ?? 'user' . $account->id,
-                'client_account_id' => $account->id,
-                'ip_address'        => $this->randomIp(),
-                'bytes_in'          => random_int(50_000_000, 3_000_000_000),   // 50MB–3GB uploaded
-                'bytes_out'         => random_int(200_000_000, 15_000_000_000), // 200MB–15GB downloaded
-                'session_start'     => now()->subMinutes(random_int(5, 600)),
-                'session_stop'      => null,
-                'status'            => 'active',
-            ]);
-        }
+            foreach ($onlineAccounts as $account) {
+                RadiusSession::create([
+                    'tenant_id'         => $tenant->id,
+                    'username'          => $account->username ?? 'user' . $account->id,
+                    'client_account_id' => $account->id,
+                    'ip_address'        => $this->randomIp(),
+                    'bytes_in'          => random_int(50_000_000, 3_000_000_000),
+                    'bytes_out'         => random_int(200_000_000, 15_000_000_000),
+                    'nas_id'            => $account->nas_id,
+                    'session_start'     => now()->subMinutes(random_int(5, 600)),
+                    'status'            => 'active',
+                ]);
+            }
 
-        // A handful of closed sessions from earlier today/yesterday, for
-        // historical realism (not counted as "active" by the dashboard).
-        $closedAccounts = $accounts->random(min(15, $accounts->count()));
+            // Closed sessions from earlier today/yesterday
+            $closedAccounts = $accounts->random(min(15, $accounts->count()));
 
-        foreach ($closedAccounts as $account) {
-            $start = now()->subHours(random_int(2, 48));
-            RadiusSession::create([
-                'username'          => $account->username ?? 'user' . $account->id,
-                'client_account_id' => $account->id,
-                'ip_address'        => $this->randomIp(),
-                'bytes_in'          => random_int(10_000_000, 1_000_000_000),
-                'bytes_out'         => random_int(50_000_000, 5_000_000_000),
-                'session_start'     => $start,
-                'session_stop'      => $start->copy()->addMinutes(random_int(10, 300)),
-                'status'            => 'stopped',
-            ]);
-        }
+            foreach ($closedAccounts as $account) {
+                $start = now()->subHours(random_int(2, 48));
+                RadiusSession::create([
+                    'tenant_id'         => $tenant->id,
+                    'username'          => $account->username ?? 'user' . $account->id,
+                    'client_account_id' => $account->id,
+                    'ip_address'        => $this->randomIp(),
+                    'bytes_in'          => random_int(10_000_000, 1_000_000_000),
+                    'bytes_out'         => random_int(50_000_000, 5_000_000_000),
+                    'nas_id'            => $account->nas_id,
+                    'session_start'     => $start,
+                    'session_stop'      => $start->copy()->addMinutes(random_int(10, 300)),
+                    'status'            => 'stopped',
+                ]);
+            }
 
-        $this->command->info(
-            "RadiusSessionSeeder: {$onlineAccounts->count()} active sessions, {$closedAccounts->count()} closed sessions."
-        );
+            $this->command->line("  [{$tenant->slug}] " . $onlineAccounts->count() . " active, " . $closedAccounts->count() . " closed sessions.");
+        });
+
+        $this->command->info('RadiusSessionSeeder: complete.');
     }
 
     private function randomIp(): string

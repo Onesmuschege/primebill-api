@@ -4,196 +4,58 @@ namespace Database\Seeders;
 
 use App\Models\Plan;
 use App\Models\Router;
+use App\Models\Tenant;
+use Database\Seeders\Traits\SeedsForTenant;
 use Illuminate\Database\Seeder;
 
 /**
- * Realistic Kenyan ISP plans — PPPoE and Hotspot.
- * Prices in KES. Speeds in Kbps.
- * All plans linked to the demo router seeded by RouterSeeder.
+ * Seeds realistic Kenyan ISP plans per tenant. Plans are tenant-owned and
+ * reference a router of that tenant. Names are prefixed with the tenant slug
+ * so the per-tenant unique constraints stay clean and cross-tenant isolation
+ * is obvious.
  */
 class PlanSeeder extends Seeder
 {
+    use SeedsForTenant;
+
     public function run(): void
     {
-        $routerId = Router::where('name', 'Core-Router-01')->value('id');
+        $this->forEachTenant(function (Tenant $tenant) {
+            $router = Router::where('tenant_id', $tenant->id)->first();
 
-        $plans = [
-            [
-                'name'           => 'Home Basic 10Mbps',
-                'type'           => 'pppoe',
-                'speed_up'       => 10240,
-                'speed_down'     => 10240,
-                'burst_up'       => 4096,
-                'burst_down'     => 4096,
-                'fup_limit'      => 20,
-                'fup_speed_up'   => 512,
-                'fup_speed_down' => 512,
-                'validity_days'  => 30,
-                'price'          => 1500.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-            [
-                'name'           => 'Home Standard 30Mbps',
-                'type'           => 'pppoe',
-                'speed_up'       => 30720,
-                'speed_down'     => 30720,
-                'burst_up'       => 8192,
-                'burst_down'     => 8192,
-                'fup_limit'      => 50,
-                'fup_speed_up'   => 1024,
-                'fup_speed_down' => 1024,
-                'validity_days'  => 30,
-                'price'          => 2500.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-            [
-                'name'           => 'Home Premium 50Mbps',
-                'type'           => 'pppoe',
-                'speed_up'       => 51200,
-                'speed_down'     => 51200,
-                'burst_up'       => 15360,
-                'burst_down'     => 15360,
-                'fup_limit'      => 100,
-                'fup_speed_up'   => 2048,
-                'fup_speed_down' => 2048,
-                'validity_days'  => 30,
-                'price'          => 4500.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-            [
-                'name'           => 'Business 100Mbps',
-                'type'           => 'pppoe',
-                'speed_up'       => 102400,
-                'speed_down'     => 102400,
-                'burst_up'       => 30720,
-                'burst_down'     => 30720,
-                'fup_limit'      => null,
-                'fup_speed_up'   => null,
-                'fup_speed_down' => null,
-                'validity_days'  => 30,
-                'price'          => 8000.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-            [
-                'name'           => 'Business Pro 150Mbps',
-                'type'           => 'pppoe',
-                'speed_up'       => 153600,
-                'speed_down'     => 153600,
-                'burst_up'       => 65536,
-                'burst_down'     => 65536,
-                'fup_limit'      => null,
-                'fup_speed_up'   => null,
-                'fup_speed_down' => null,
-                'validity_days'  => 30,
-                'price'          => 15000.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
+            $prefix = $tenant->slug;
 
-            // ── NEW: Family tier fills the gap between Basic and Standard ──
-            [
-                'name'           => 'Enterprise 300Mbps',
-                'type'           => 'pppoe',
-                'speed_up'       => 307200,
-                'speed_down'     => 307200,
-                'burst_up'       => 92160,
-                'burst_down'     => 92160,
-                'fup_limit'      => 30,
-                'fup_speed_up'   => 12288,
-                'fup_speed_down' => 12288,
-                'validity_days'  => 30,
-                'price'          => 20000.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
+            $plans = [
+                [$prefix . ': Home Basic 10Mbps',  'pppoe', 10240,   10240,   1500.00],
+                [$prefix . ': Home Standard 30Mbps','pppoe', 30720,  30720,   2500.00],
+                [$prefix . ': Home Premium 50Mbps', 'pppoe', 51200,  51200,   4500.00],
+                [$prefix . ': Business 100Mbps',    'pppoe', 102400, 102400,  8000.00],
+                [$prefix . ': Business Pro 150Mbps', 'pppoe', 153600, 153600, 15000.00],
+                [$prefix . ': Hotspot 1 Hour',      'hotspot', 10240, 10240,   10.00],
+                [$prefix . ': Hotspot 24 Hours',    'hotspot', 10240, 10240,   30.00],
+            ];
 
-            [
-                'name'           => 'Hotspot 1 Hour',
-                'type'           => 'hotspot',
-                'speed_up'       => 10240,
-                'speed_down'     => 10240,
-                'burst_up'       => 4096,
-                'burst_down'     => 4096,
-                'fup_limit'      => 1,
-                'fup_speed_up'   => 512,
-                'fup_speed_down' => 512,
-                'validity_days'  => 1,
-                'price'          => 10.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-            [
-                'name'           => 'Hotspot 2 Hours',
-                'type'           => 'hotspot',
-                'speed_up'       => 10240,
-                'speed_down'     => 10240,
-                'burst_up'       => 3072,
-                'burst_down'     => 3072,
-                'fup_limit'      => 3,
-                'fup_speed_up'   => 512,
-                'fup_speed_down' => 512,
-                'validity_days'  => 1,
-                'price'          => 15.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
+            foreach ($plans as [$name, $type, $up, $down, $price]) {
+                Plan::updateOrCreate(
+                    ['tenant_id' => $tenant->id, 'name' => $name],
+                    [
+                        'type'           => $type,
+                        'speed_up'       => $up,
+                        'speed_down'     => $down,
+                        'burst_up'       => (int) ($up / 4),
+                        'burst_down'     => (int) ($down / 4),
+                        'fup_limit'      => $type === 'pppoe' ? 50 : null,
+                        'fup_speed_up'   => 1024,
+                        'fup_speed_down' => 1024,
+                        'validity_days'  => $type === 'hotspot' ? 1 : 30,
+                        'price'          => $price,
+                        'router_id'      => $router?->id,
+                        'is_active'      => true,
+                    ]
+                );
+            }
+        });
 
-            // ── NEW: rounds out the hotspot lineup for the captive portal ──
-            [
-                'name'           => 'Hotspot 5 Hours',
-                'type'           => 'hotspot',
-                'speed_up'       => 10240,
-                'speed_down'     => 10240,
-                'burst_up'       => 4096,
-                'burst_down'     => 4096,
-                'fup_limit'      => 3,
-                'fup_speed_up'   => 512,
-                'fup_speed_down' => 512,
-                'validity_days'  => 1,
-                'price'          => 20.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-            [
-                'name'           => 'Hotspot 10 Hours',
-                'type'           => 'hotspot',
-                'speed_up'       => 10240,
-                'speed_down'     => 10240,
-                'burst_up'       => 4096,
-                'burst_down'     => 4096,
-                'fup_limit'      => 8,
-                'fup_speed_up'   => 768,
-                'fup_speed_down' => 768,
-                'validity_days'  => 1,
-                'price'          => 25.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-            [
-                'name'           => 'Hotspot 24 Hours',
-                'type'           => 'hotspot',
-                'speed_up'       => 10240,
-                'speed_down'     => 10240,
-                'burst_up'       => 4096,
-                'burst_down'     => 4096,
-                'fup_limit'      => 25,
-                'fup_speed_up'   => 768,
-                'fup_speed_down' => 768,
-                'validity_days'  => 1,
-                'price'          => 30.00,
-                'router_id'      => $routerId,
-                'is_active'      => true,
-            ],
-        ];
-
-        foreach ($plans as $plan) {
-            Plan::updateOrCreate(['name' => $plan['name']], $plan);
-        }
-
-        $this->command->info('PlanSeeder: ' . count($plans) . ' plans seeded.');
+        $this->command->info('PlanSeeder: plans seeded per tenant.');
     }
 }

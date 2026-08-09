@@ -1,0 +1,21 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Tenant;
+use Database\Seeders\Traits\SeedsForTenant;
+use Illuminate\Database\Seeder;
+
+class AnnouncementSeeder extends Seeder
+{
+    use SeedsForTenant;
+
+    public function run(): void
+    {
+        $this->forEachTenant(function (Tenant $tenant) {
+            $this->command->line("  [{$tenant->slug}] AnnouncementSeeder skipped (placeholder).");
+        });
+
+        $this->command->info('AnnouncementSeeder: complete.');
+    }
+}

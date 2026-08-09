@@ -5,17 +5,16 @@ namespace Database\Seeders;
 use App\Models\Client;
 use App\Models\Ticket;
 use App\Models\TicketReply;
+use App\Models\Tenant;
 use App\Models\User;
+use Database\Seeders\Traits\SeedsForTenant;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
-/**
- * Seeds 10 support tickets across different clients.
- * Mix of open, pending, and solved statuses.
- * Solved and pending tickets get a staff reply.
- */
 class TicketSeeder extends Seeder
 {
+    use SeedsForTenant;
+
     private array $tickets = [
         [
             'subject'     => 'Internet connection is down',
@@ -89,51 +88,69 @@ class TicketSeeder extends Seeder
         ],
     ];
 
-    public function run(): void
+        public function run(): void
     {
-        $admin   = User::where('email', 'admin@primebill.co.ke')->first();
-        $clients = Client::where('status', 'active')->get();
+        $this->forEachTenant(function (Tenant $tenant) {
+            $admin = User::where('tenant_id', $tenant->id)
+                ->whereHas('roles', fn ($q) => $q->whereIn('name', ['super_admin', 'admin']))
+                ->first();
 
-        if ($clients->isEmpty()) {
-            $this->command->warn('TicketSeeder: No active clients found. Skipping.');
-            return;
-        }
-
-        $count = 0;
-
-        foreach ($this->tickets as $index => $data) {
-            $client    = $clients[$index % $clients->count()];
-            $createdAt = Carbon::now()->subDays(rand(1, 45));
-            $closedAt  = $data['status'] === 'solved'
-                ? $createdAt->copy()->addHours(rand(4, 72))
-                : null;
-
-            $ticket = Ticket::create([
-                'client_id'   => $client->id,
-                'assigned_to' => $admin->id,
-                'subject'     => $data['subject'],
-                'description' => $data['description'],
-                'priority'    => $data['priority'],
-                'status'      => $data['status'],
-                'closed_at'   => $closedAt,
-                'created_at'  => $createdAt,
-                'updated_at'  => $closedAt ?? $createdAt,
-            ]);
-
-            if ($data['reply']) {
-                TicketReply::create([
-                    'ticket_id'   => $ticket->id,
-                    'user_id'     => $admin->id,
-                    'message'     => $data['reply'],
-                    'is_internal' => false,
-                    'created_at'  => $createdAt->copy()->addHours(rand(1, 12)),
-                    'updated_at'  => $createdAt->copy()->addHours(rand(1, 12)),
-                ]);
+            if (! $admin) {
+                $this->command->warn("TicketSeeder [{$tenant->slug}]: No admin/user found. Skipping.");
+                return;
             }
 
-            $count++;
-        }
+            $clients = Client::where('tenant_id', $tenant->id)->where('status', 'active')->get();
 
-        $this->command->info("TicketSeeder: {$count} tickets seeded.");
+            if ($clients->isEmpty()) {
+                $this->command->warn("TicketSeeder [{$tenant->slug}]: No active clients. Skipping.");
+                return;
+            }
+
+            $count = 0;
+
+            foreach ($this->tickets as $index => $data) {
+                $client    = $clients[$index % $clients->count()];
+                $createdAt = Carbon::now()->subDays(rand(1, 45));
+                $closedAt  = $data['status'] === 'solved'
+                    ? $createdAt->copy()->addHours(rand(4, 72))
+                    : null;
+
+                $ticket = Ticket::updateOrCreate(
+                    ['client_id' => $client->id, 'subject' => $data['subject']],
+                    [
+                        'client_id'   => $client->id,
+                        'assigned_to' => $admin->id,
+                        'subject'     => $data['subject'],
+                        'description' => $data['description'],
+                        'priority'    => $data['priority'],
+                        'status'      => $data['status'],
+                        'closed_at'   => $closedAt,
+                        'created_at'  => $createdAt,
+                        'updated_at'  => $closedAt ?? $createdAt,
+                    ]
+                );
+
+                if ($data['reply']) {
+                    TicketReply::updateOrCreate(
+                        ['ticket_id' => $ticket->id, 'user_id' => $admin->id, 'message' => $data['reply']],
+                        [
+                            'ticket_id'   => $ticket->id,
+                            'user_id'     => $admin->id,
+                            'message'     => $data['reply'],
+                            'is_internal' => false,
+                            'created_at'  => $createdAt->copy()->addHours(rand(1, 12)),
+                            'updated_at'  => $createdAt->copy()->addHours(rand(1, 12)),
+                        ]
+                    );
+                }
+
+                $count++;
+            }
+
+            $this->command->line("  [{$tenant->slug}] {$count} tickets seeded.");
+        });
+
+        $this->command->info('TicketSeeder: complete.');
     }
 }
