@@ -69,6 +69,7 @@ use App\Http\Controllers\Api\RouterConfigurationController;
 use App\Http\Controllers\Api\RadiusAdvancedController;
 use App\Http\Controllers\Api\FiberExtensionController;
 use App\Http\Controllers\Api\InventoryManagementController;
+use App\Http\Controllers\Api\InventoryOperationsController;
 use App\Http\Controllers\Api\SupportCatalogController;
 use App\Http\Controllers\Api\CommunicationsController;
 use App\Http\Controllers\Api\CustomerExperienceController;
@@ -778,6 +779,40 @@ Route::prefix('inventory-ext')->middleware('permission:view inventory-ext')->gro
         Route::get('/{resource}/{id}',      [InventoryManagementController::class, 'catalogShow']);
         Route::put('/{resource}/{id}',      [InventoryManagementController::class, 'catalogUpdate'])->middleware('permission:manage inventory-ext');
         Route::delete('/{resource}/{id}',   [InventoryManagementController::class, 'catalogDestroy'])->middleware('permission:manage inventory-ext');
+    });
+
+    // ─── Inventory Engine — real workflow endpoints (Phase D2) ──────────────
+    // These replace generic CRUD for stock movements, transfers and purchase
+    // orders with genuine business workflows. Each action is guarded by a
+    // granular permission and every service call is transactional + tenant
+    // scoped.
+    Route::prefix('inventory/operations')->group(function () {
+        // Stock movements
+        Route::post('/stock/receive',   [InventoryOperationsController::class, 'receive'])->middleware('permission:inventory.stock.receive');
+        Route::post('/stock/issue',     [InventoryOperationsController::class, 'issue'])->middleware('permission:inventory.stock.issue');
+        Route::post('/stock/adjust',    [InventoryOperationsController::class, 'adjust'])->middleware('permission:inventory.stock.adjust');
+        Route::post('/stock/return',    [InventoryOperationsController::class, 'returnStock'])->middleware('permission:inventory.stock.receive');
+        Route::get('/items/{id}/balances', [InventoryOperationsController::class, 'balances'])->middleware('permission:inventory.stock.view');
+
+        // Stock transfers
+        Route::get('/transfers',            [InventoryOperationsController::class, 'transferIndex'])->middleware('permission:inventory.transfer.view');
+        Route::post('/transfers',           [InventoryOperationsController::class, 'transferStore'])->middleware('permission:inventory.transfer.create');
+        Route::get('/transfers/{transfer}', [InventoryOperationsController::class, 'transferShow'])->middleware('permission:inventory.transfer.view');
+        Route::post('/transfers/{transfer}/approve', [InventoryOperationsController::class, 'transferApprove'])->middleware('permission:inventory.transfer.approve');
+        Route::post('/transfers/{transfer}/dispatch',[InventoryOperationsController::class, 'transferDispatch'])->middleware('permission:inventory.transfer.dispatch');
+        Route::post('/transfers/{transfer}/receive', [InventoryOperationsController::class, 'transferReceive'])->middleware('permission:inventory.transfer.receive');
+        Route::post('/transfers/{transfer}/cancel',  [InventoryOperationsController::class, 'transferCancel'])->middleware('permission:inventory.transfer.cancel');
+        Route::post('/transfers/{transfer}/reverse', [InventoryOperationsController::class, 'transferReverse'])->middleware('permission:inventory.transfer.reverse');
+
+        // Purchase orders
+        Route::get('/purchase-orders',            [InventoryOperationsController::class, 'poIndex'])->middleware('permission:inventory.po.view');
+        Route::post('/purchase-orders',           [InventoryOperationsController::class, 'poStore'])->middleware('permission:inventory.po.create');
+        Route::get('/purchase-orders/{po}',       [InventoryOperationsController::class, 'poShow'])->middleware('permission:inventory.po.view');
+        Route::post('/purchase-orders/{po}/submit',   [InventoryOperationsController::class, 'poSubmit'])->middleware('permission:inventory.po.submit');
+        Route::post('/purchase-orders/{po}/approve',  [InventoryOperationsController::class, 'poApprove'])->middleware('permission:inventory.po.approve');
+        Route::post('/purchase-orders/{po}/receive',  [InventoryOperationsController::class, 'poReceive'])->middleware('permission:inventory.po.receive');
+        Route::post('/purchase-orders/{po}/complete', [InventoryOperationsController::class, 'poComplete'])->middleware('permission:inventory.po.complete');
+        Route::post('/purchase-orders/{po}/cancel',   [InventoryOperationsController::class, 'poCancel'])->middleware('permission:inventory.po.cancel');
     });
 
     Route::prefix('support-catalog')->middleware('permission:view support-catalog')->group(function () {

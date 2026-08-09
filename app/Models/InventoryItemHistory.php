@@ -10,6 +10,12 @@ class InventoryItemHistory extends Model
 {
     use BelongsToTenant;
 
+    /**
+     * The migration stores history in a singular table name, which differs
+     * from Eloquent's default pluralised `inventory_item_histories`.
+     */
+    protected $table = 'inventory_item_history';
+
     protected $fillable = [
         'tenant_id',
         'inventory_item_id',

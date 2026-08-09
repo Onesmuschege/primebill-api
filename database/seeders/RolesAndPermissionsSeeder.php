@@ -241,6 +241,30 @@ class RolesAndPermissionsSeeder extends Seeder
 
             /*
             |--------------------------------------------------------------------------
+            | Inventory Engine workflows (Phase D2)
+            |--------------------------------------------------------------------------
+            */
+            'inventory.stock.view',
+            'inventory.stock.receive',
+            'inventory.stock.issue',
+            'inventory.stock.adjust',
+            'inventory.transfer.view',
+            'inventory.transfer.create',
+            'inventory.transfer.approve',
+            'inventory.transfer.dispatch',
+            'inventory.transfer.receive',
+            'inventory.transfer.cancel',
+            'inventory.transfer.reverse',
+            'inventory.po.view',
+            'inventory.po.create',
+            'inventory.po.submit',
+            'inventory.po.approve',
+            'inventory.po.receive',
+            'inventory.po.complete',
+            'inventory.po.cancel',
+
+            /*
+            |--------------------------------------------------------------------------
             | Administration - Users
             |--------------------------------------------------------------------------
             */
@@ -468,6 +492,26 @@ class RolesAndPermissionsSeeder extends Seeder
             'create inventory',
             'edit inventory',
             'delete inventory',
+
+            // Inventory Engine workflows (Phase D2)
+            'inventory.stock.view',
+            'inventory.stock.receive',
+            'inventory.stock.issue',
+            'inventory.stock.adjust',
+            'inventory.transfer.view',
+            'inventory.transfer.create',
+            'inventory.transfer.approve',
+            'inventory.transfer.dispatch',
+            'inventory.transfer.receive',
+            'inventory.transfer.cancel',
+            'inventory.transfer.reverse',
+            'inventory.po.view',
+            'inventory.po.create',
+            'inventory.po.submit',
+            'inventory.po.approve',
+            'inventory.po.receive',
+            'inventory.po.complete',
+            'inventory.po.cancel',
 
             // Administration
             'view users',
