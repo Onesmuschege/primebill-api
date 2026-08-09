@@ -25,11 +25,12 @@ class SmsController extends Controller
             'client_id' => 'nullable|exists:clients,id',
         ]);
 
-        // Queue the SMS
+// Queue the SMS
         SendSmsJob::dispatch(
             $request->phone,
             $request->message,
-            $request->client_id
+            $request->client_id,
+            \App\Models\Tenant::current()?->id
         );
 
         return response()->json([

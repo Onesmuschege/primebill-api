@@ -42,7 +42,7 @@ class ClientAccountController extends Controller
             'activated_at' => now(),
         ]);
 
-        ProvisionClientAccountJob::dispatch($account->id, $plainPassword);
+ProvisionClientAccountJob::dispatch($account->id, $plainPassword, $account->tenant_id);
 
         SystemLog::create([
             'user_id'    => $request->user()->id,
@@ -77,8 +77,8 @@ class ClientAccountController extends Controller
 
         if ($request->filled('status') && $request->status !== $previousStatus) {
             match ($request->status) {
-                'suspended' => SuspendNetworkAccessJob::dispatch($account->id),
-                'active'    => ActivateNetworkAccessJob::dispatch($account->id),
+                'suspended' => SuspendNetworkAccessJob::dispatch($account->id, $account->tenant_id),
+                'active'    => ActivateNetworkAccessJob::dispatch($account->id, $account->tenant_id),
                 default     => null,
             };
         }

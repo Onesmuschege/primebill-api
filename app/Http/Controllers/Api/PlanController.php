@@ -123,7 +123,7 @@ class PlanController extends Controller
             'activated_at' => now(),
         ]);
 
-        ProvisionClientAccountJob::dispatch($account->id, $plainPassword);
+        ProvisionClientAccountJob::dispatch($account->id, $plainPassword, $account->tenant_id);
 
         return response()->json([
             'success' => true,

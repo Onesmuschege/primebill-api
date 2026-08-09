@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\SystemLog;
 use App\Models\Tenant;
 use App\Services\Audit\AuditService;
 use App\Services\Platform\PlatformAdminService;
@@ -414,6 +415,52 @@ class PlatformAdminController extends Controller
         $this->lifecycleService->endImpersonation($request);
 
         return $this->success(null, 'Impersonation ended');
+    }
+
+// ─── Audit Log ────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/platform/audit-log
+     *
+     * Platform-wide audit trail. Reuses the existing AuditService storage
+     * (SystemLog) — no duplicate audit storage is created. Supports filtering
+     * by tenant_id, action, and date range, plus pagination.
+     *
+     * Secrets (passwords, tokens, API keys) are never persisted by
+     * AuditService::maskSensitiveData, so nothing sensitive is returned here.
+     */
+    public function auditLog(Request $request)
+    {
+        $validated = $request->validate([
+            'tenant_id' => 'nullable|integer|exists:tenants,id',
+            'action'    => 'nullable|string|max:255',
+            'date_from' => 'nullable|date',
+            'date_to'   => 'nullable|date|after_or_equal:date_from',
+            'per_page'  => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $query = SystemLog::with('user')->orderByDesc('created_at');
+
+        if (!empty($validated['tenant_id'])) {
+            $query->where('tenant_id', $validated['tenant_id']);
+        }
+
+        if (!empty($validated['action'])) {
+            $query->where('action', 'like', '%' . $validated['action'] . '%');
+        }
+
+        if (!empty($validated['date_from'])) {
+            $query->where('created_at', '>=', $validated['date_from']);
+        }
+
+        if (!empty($validated['date_to'])) {
+            $query->where('created_at', '<=', $validated['date_to'] . ' 23:59:59');
+        }
+
+        $perPage = $validated['per_page'] ?? 20;
+        $logs = $query->paginate($perPage);
+
+        return $this->success($logs);
     }
 
     // ─── Create Admin User ─────────────────────────────────────────────────
