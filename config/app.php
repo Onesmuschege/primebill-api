@@ -37,13 +37,10 @@ return [
     |--------------------------------------------------------------------------
     | Seeder Credentials
     |--------------------------------------------------------------------------
-    | Passwords used by AdminUserSeeder. Set SEED_ADMIN_PASSWORD and
-    | SEED_STAFF_PASSWORD in your .env file. Never call env() directly
+    | Password used by TenantUserSeeder for all demo tenant staff accounts. Never call env() directly
     | outside config files — seeders must use config() so values are
     | available even when the config cache is active.
 */
-    'seed_admin_password' => env('SEED_ADMIN_PASSWORD', 'Admin@123'),
-    'seed_staff_password' => env('SEED_STAFF_PASSWORD', 'Staff@123'),
     'seed_demo_password' => env('SEED_DEMO_PASSWORD', 'Demo@1234'),
 
 ];

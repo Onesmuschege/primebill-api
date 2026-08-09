@@ -1,32 +1,10 @@
 # PrimeBill API (backend)
 
-This repository is the Laravel 12 backend for PrimeBill — an ISP OSS/BSS platform focused on billing, provisioning (MikroTik + FreeRADIUS), payments (M-Pesa), vouchers, loyalty, and tenant SaaS operations.
-
-This README has been rewritten to reflect the current codebase and commit history (not older planning drafts). For a compact, living project status and next steps see PROJECT_STATUS.md and IMPLEMENTATION_ROADMAP.md in the repo root.
+PrimeBill is a multi-tenant ISP OSS/BSS platform built on Laravel 12. This backend handles billing, provisioning (MikroTik + FreeRADIUS), payments (M-Pesa), vouchers, loyalty/referrals, CRM (leads/prospects), field operations, NOC, fiber/OLT management, IPAM, and a full platform-admin console for PrimeBill operators.
 
 ---
 
-## Quick status (current)
-- Backend: Laravel 12 (PHP 8.2+). Extensive feature set implemented across billing, provisioning, RADIUS, routers, vouchers, loyalty, tickets, inventory and tenant SaaS foundations.
-- Multi-tenancy: tenants table and tenant_id applied across core models; TenantResolver and BelongsToTenant pattern implemented.
-- Payments: M-Pesa STK + C2B callbacks with idempotency keys and enhanced callback verification.
-- Invoicing: full CRUD, bulk generation, and PDF export via barryvdh/laravel-dompdf (invoice blade template present).
-- Network: MikroTik RouterOS provisioning adapter + Mock adapter, FreeRADIUS adapters, router traffic polling jobs.
-- Communications: SMS + WhatsApp gateways implemented; consolidated working EmailService wired into billing jobs.
-- Tests: feature tests exist for several critical flows (client, MPesa callback, portal registration, provisioning, password reset, invoice tax). Test coverage should be expanded.
-
----
-
-## What I changed in this README
-- Replaced the older, aspirational prose with a concise, accurate snapshot of implemented features and high-priority gaps derived from the code and commit history.
-- Pointed to PROJECT_STATUS.md and IMPLEMENTATION_ROADMAP.md for the authoritative, per-module status and the prioritized backlog.
-
----
-
-## How to get the project running (developer)
-1. Copy the example environment and edit `.env` with database, Redis and gateway secrets.
-
-2. Install dependencies and build assets:
+## Quick start
 
 ```bash
 composer install
@@ -37,51 +15,167 @@ npm install
 npm run build
 ```
 
-3. Run queues & scheduler in development (example):
+Run the dev stack:
 
 ```bash
-php artisan queue:work redis --sleep=3 --tries=3
-php artisan schedule:run
+composer run dev
 ```
 
-4. Run tests:
+Run the test suite:
 
 ```bash
+composer test
+# or
 php artisan test
 ```
 
 ---
 
+## Current feature set
+
+### Multi-tenancy & SaaS
+- Tenant registration with slug-based isolation (`/tenants/register`, `/tenants/check-slug`)
+- `tenant_id` scoping across core models; `TenantResolver` middleware switches context from route slug to authenticated user
+- Platform-admin console (`/api/platform/*`) for cross-tenant operations: tenant CRUD, lifecycle (suspend/activate/archive), quotas, feature flags, impersonation, audit log
+
+### Client Lifecycle & CRM
+- Full client CRUD with notes, tags, and custom fields
+- Service accounts (PPPoE, Hotspot, Static IP) with status tracking
+- Lead management (stats, convert to prospect, mark lost)
+- Prospect pipeline (advance stages, mark won/lost, convert to client)
+
+### Subscriptions & Licensing
+- Subscription plans with trial, convert, cancel, upgrade, renew
+- Subscription payment lifecycle via M-Pesa (initiate, callback, history)
+- Usage tracking per subscription
+
+### Billing & Payments
+- Invoice CRUD, bulk generation, PDF export (`barryvdh/laravel-dompdf`)
+- Payment recording with allocation engine
+- M-Pesa STK Push + C2B callbacks with idempotency keys and callback verification
+- Expenditure tracking, commissions (approve/pay), and sales commissions
+
+### Network & Provisioning
+- MikroTik RouterOS provisioning adapter + Mock adapter
+- FreeRADIUS adapters with accounting webhook (`/webhooks/radius/accounting`)
+- RADIUS advanced controller (profiles, attributes)
+- Router traffic polling jobs and session management
+- Network dashboard (unified overview, routers, sessions, events, control logs, RADIUS stats)
+- Service network actions (suspend, restore, disconnect, COA)
+
+### NOC & Fiber
+- NOC dashboard (overview, devices, metrics, alerts, topology links)
+- OLT management (OLTs, PON ports, ONTs)
+- Fiber infrastructure (routes, splitters, cabinets, distribution points)
+- Incident/outage management (acknowledge, resolve, close, status updates)
+
+### Support & Communications
+- Ticketing (Open/Pending/Solved, threaded replies, assignment, escalate, close)
+- SMS gateway (Africa's Talking, Hostpinnacle) with single/bulk send, templates, logs, balance
+- Communications catalog (campaigns with lifecycle transitions, templates)
+
+### Inventory & Field Ops
+- Inventory CRUD with low-stock alerts, assignment, return
+- Purchase order workflow (create, approve, receive, complete, cancel)
+- Work orders (stats, assign technician, status tracking)
+
+### Security & Compliance
+- MFA (TOTP enable/verify/disable, backup codes)
+- API keys management
+- Login history and security events
+- Session management (list, revoke individual, revoke all)
+
+### Client Portal (public + authenticated)
+- Tenant-slug-prefixed portal (`/portal/{tenant_slug}`)
+- Client self-registration and login
+- Captive portal (public plans, theme, status check, M-Pesa pay, voucher redeem)
+- Profile management, invoice history, self-payment, ticket submission
+
+### Platform Admin
+- Cross-tenant stats, plans, tenant CRUD
+- Tenant configuration (company, branding, localization, plan assignment)
+- Tenant lifecycle management
+- Quotas, limits, feature flags
+- Health checks, billing, subscription overview
+- Tenant impersonation
+- Admin user creation per tenant
+- Audit log
+- Subscription management (upgrade, suspend, resume, cancel, renew)
+
+---
+
 ## Key files & locations
+
 - API routes: `routes/api.php`
 - Controllers: `app/Http/Controllers/Api` and `app/Http/Controllers/Portal`
 - Models: `app/Models`
-- Services (domain logic): `app/Services` (organized by domain)
 - Jobs: `app/Jobs`
-- Console commands (scheduled): `app/Console/Commands`
+- Console commands: `app/Console/Commands`
 - Migrations: `database/migrations`
+- Seeders: `database/seeders`
 - PDF invoice template: `resources/views/pdf/invoice.blade.php`
+- Tests: `tests/`
 
 ---
 
-## Known high-priority gaps (action items)
-1. Expand automated tests for billing reconciliation, MPesa idempotency, RADIUS webhook ingestion, router provisioning and tenancy-isolation checks.
-2. Add an audit/activity logging integration (e.g. spatie/laravel-activitylog) and wire critical model events.
-3. Add CI workflow to run migrations and the full test matrix on pull requests (if not already present or enabled).
-4. Implement bulk report/export jobs (queued PDF/CSV/Excel) and storage for large exports.
-5. Add production observability (Sentry/Datadog), job/queue monitoring, and alerts for failed scheduled jobs.
+## Seeded demo data
+
+After `php artisan migrate --seed`, three demo tenants are created:
+
+| Tenant | Slug |
+|--------|------|
+| PrimeNet ISP | `primenet-isp` |
+| SwiftLink Communications | `swiftlink-communications` |
+| MetroWave Internet | `metrowave-internet` |
+
+Each tenant gets 5 staff accounts:
+
+```text
+Email:    {slug}.admin@primebill.test
+Email:    {slug}.staff@primebill.test
+Email:    {slug}.support@primebill.test
+Email:    {slug}.technician@primebill.test
+Email:    {slug}.finance@primebill.test
+Password: Demo@2026  (set via SEED_DEMO_PASSWORD in .env)
+```
+
+The **Platform Admin** (`is_platform_admin = true`) is not seeded automatically. Create it manually:
+
+```bash
+php artisan platform:make-admin platform@primebill.co.ke
+```
+
+Change all demo passwords after first login.
 
 ---
 
-## Documentation & next steps
-- I have created PROJECT_STATUS.md and IMPLEMENTATION_ROADMAP.md as companion documents. These are the canonical, commit-driven plan and backlog — edit them only after code changes to keep them accurate.
-- There are several planning documents and historical artifacts in the repo root; I recommend archiving or removing them to avoid confusion. I will present a proposed list of files to archive/remove so you can confirm removal before I delete anything.
+## Environment
+
+Key `.env` variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `SEED_DEMO_PASSWORD` | Password for seeded tenant staff accounts |
+| `MPESA_ENV` | `sandbox` or `production` |
+| `MPESA_SHORTCODE` | M-Pesa shortcode |
+| `MPESA_CONSUMER_KEY` | M-Pesa consumer key |
+| `MPESA_CONSUMER_SECRET` | M-Pesa consumer secret |
+| `MPESA_PASSKEY` | M-Pesa passkey |
+| `SMS_GATEWAY` | `africas_talking` or `hostpinnacle` |
+| `RADIUS_DRIVER` | `freeradius` or `mock` |
+| `VITE_API_BASE_URL` | Frontend dev proxy target |
 
 ---
 
-If you want me to proceed I can:
-- Archive/remove outdated planning files (I will list files and justification first), and
-- Expand tests and add the CI workflow, and
-- Implement the highest-priority fixes in small, reviewable PRs.
+## Known gaps
 
-Tell me which cleanup actions to perform next (I will not delete files until you confirm).
+1. Expand automated tests for billing reconciliation, M-Pesa idempotency, RADIUS webhook ingestion, router provisioning, and tenancy-isolation checks.
+2. Add production observability (Sentry/Datadog), queue monitoring, and alerts for failed scheduled jobs.
+3. Implement queued bulk report/export jobs (PDF/CSV/Excel) with storage for large exports.
+4. Several catalog domains (IPAM, support catalog, communications, customer experience, security admin, field ops, reporting tools) have backend routes but frontend pages are minimal or missing.
+
+---
+
+## License
+
+Proprietary.
