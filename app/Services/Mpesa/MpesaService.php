@@ -316,7 +316,7 @@ class MpesaService
 
         foreach ($client->accounts()->where('status', 'suspended')->get() as $account) {
             $account->update(['status' => 'active']);
-            ActivateNetworkAccessJob::dispatch($account->id);
+            ActivateNetworkAccessJob::dispatch($account->id, $client->tenant_id);
         }
 
         $client->update(['status' => 'active']);

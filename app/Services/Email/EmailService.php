@@ -20,7 +20,7 @@ class EmailService
                     ->subject($subject)
                     ->from(config('mail.from.address'), config('mail.from.name'));
             });
-            
+
             Log::info("Email sent to {$email}", ['subject' => $subject]);
             return true;
         } catch (\Exception $e) {
@@ -35,7 +35,7 @@ class EmailService
     public function sendInvoice(Client $client, $invoice): bool
     {
         if (!$client->email) return false;
-        
+
         return $this->send(
             $client->email,
             "Invoice #{$invoice->invoice_number}",
@@ -50,7 +50,7 @@ class EmailService
     public function sendPaymentReceipt(Client $client, $payment): bool
     {
         if (!$client->email) return false;
-        
+
         return $this->send(
             $client->email,
             "Payment Receipt - " . now()->format('d M Y'),
@@ -65,7 +65,7 @@ class EmailService
     public function sendSuspensionWarning(Client $client, $daysUntilSuspension): bool
     {
         if (!$client->email) return false;
-        
+
         return $this->send(
             $client->email,
             'Account Suspension Warning',
@@ -80,12 +80,43 @@ class EmailService
     public function sendSuspensionNotice(Client $client): bool
     {
         if (!$client->email) return false;
-        
+
         return $this->send(
             $client->email,
             'Your Account Has Been Suspended',
             'emails.suspension-notice',
             ['client' => $client]
         );
+    }
+
+    /**
+     * Send account suspended notification (alias used by billing commands).
+     */
+    public function accountSuspendedEmail(Client $client): bool
+    {
+        return $this->sendSuspensionNotice($client);
+    }
+
+    /**
+     * Send account activated/reactivated notification (used by billing commands).
+     */
+    public function accountActivatedEmail(Client $client): bool
+    {
+        if (!$client->email) return false;
+
+        return $this->send(
+            $client->email,
+            'Your Account Has Been Reactivated',
+            'emails.account-activated',
+            ['client' => $client]
+        );
+    }
+
+    /**
+     * Send invoice email (alias).
+     */
+    public function invoiceEmail(Client $client, $invoice): bool
+    {
+        return $this->sendInvoice($client, $invoice);
     }
 }

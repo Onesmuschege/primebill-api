@@ -187,7 +187,7 @@ class PaymentService
             'expiry_date' => $newExpiry,
         ]);
 
-        ActivateNetworkAccessJob::dispatch($account->id);
+        ActivateNetworkAccessJob::dispatch($account->id, $account->tenant_id);
     }
 
     /**

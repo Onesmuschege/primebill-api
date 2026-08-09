@@ -79,7 +79,8 @@ class TicketService
             SendSmsJob::dispatch(
                 $ticket->client->phone,
                 "Dear {$ticket->client->first_name}, your ticket #{$ticket->id} has been updated. Login to view the reply.",
-                $ticket->client_id
+                $ticket->client_id,
+                $ticket->client->tenant_id
             );
         }
 
@@ -119,7 +120,8 @@ class TicketService
             SendSmsJob::dispatch(
                 $ticket->client->phone,
                 "Dear {$ticket->client->first_name}, your ticket #{$ticket->id} has been closed. Thank you.",
-                $ticket->client_id
+                $ticket->client_id,
+                $ticket->client->tenant_id
             );
         }
 

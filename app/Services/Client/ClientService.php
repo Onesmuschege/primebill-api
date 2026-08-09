@@ -88,11 +88,11 @@ class ClientService
     {
         $client->update(['status' => 'suspended']);
 
-        $accounts = $client->accounts()->where('status', 'active')->get();
+$accounts = $client->accounts()->where('status', 'active')->get();
 
         foreach ($accounts as $account) {
             $account->update(['status' => 'suspended']);
-            SuspendNetworkAccessJob::dispatch($account->id);
+            SuspendNetworkAccessJob::dispatch($account->id, $account->tenant_id);
         }
 
         SystemLog::create([
@@ -116,7 +116,7 @@ class ClientService
 
         foreach ($accounts as $account) {
             $account->update(['status' => 'active']);
-            ActivateNetworkAccessJob::dispatch($account->id);
+            ActivateNetworkAccessJob::dispatch($account->id, $account->tenant_id);
         }
 
         SystemLog::create([
