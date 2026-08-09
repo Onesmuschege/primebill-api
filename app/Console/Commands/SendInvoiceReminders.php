@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Invoice;
-use App\Services\Communication\EmailService;
+use App\Services\Email\EmailService;
 use App\Services\Sms\SmsService;
 use Illuminate\Console\Command;
 
