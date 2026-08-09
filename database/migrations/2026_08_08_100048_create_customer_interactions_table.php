@@ -22,7 +22,7 @@ return new class extends Migration
             $table->json('metadata')->nullable(); // duration, outcome, follow_up_required, etc.
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete(); // Staff member
             $table->ipAddress('ip_address')->nullable();
-            $table->userAgent()->nullable();
+            $table->string('user_agent')->nullable();
             $table->timestamps();
 
             $table->index(['tenant_id', 'client_id', 'type']);

@@ -18,7 +18,7 @@ return new class extends Migration
             $table->json('metadata')->nullable(); // previous_status, new_status, trigger, etc.
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete(); // Staff who triggered it
             $table->ipAddress('ip_address')->nullable();
-            $table->userAgent()->nullable();
+            $table->string('user_agent')->nullable();
             $table->timestamps();
 
             $table->index(['tenant_id', 'client_id', 'event']);

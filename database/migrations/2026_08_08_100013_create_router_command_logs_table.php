@@ -21,7 +21,7 @@ return new class extends Migration
             $table->json('context')->nullable(); // Additional context
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete(); // Who triggered it
             $table->ipAddress('ip_address')->nullable();
-            $table->userAgent()->nullable();
+            $table->string('user_agent')->nullable();
             $table->timestamps();
 
             $table->index(['tenant_id', 'router_id', 'status']);

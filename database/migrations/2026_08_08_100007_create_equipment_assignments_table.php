@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('equipment_assignments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('customer_equipment_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('customer_equipment_id')->constrained('customer_equipment')->cascadeOnDelete();
             $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete(); // technician
             $table->foreignId('work_order_id')->nullable()->constrained()->nullOnDelete();

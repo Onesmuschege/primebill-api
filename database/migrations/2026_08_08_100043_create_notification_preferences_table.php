@@ -25,8 +25,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['tenant_id', 'notifiable_type', 'notifiable_id']);
-            $table->unique(['tenant_id', 'notifiable_type', 'notifiable_id', 'deleted_at']);
+            $table->unique(['tenant_id', 'notifiable_type', 'notifiable_id', 'deleted_at'], 'notification_prefs_unique');
             $table->index(['tenant_id', 'created_at']);
         });
     }

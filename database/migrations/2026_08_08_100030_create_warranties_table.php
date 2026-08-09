@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('inventory_item_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('customer_equipment_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('customer_equipment_id')->nullable()->constrained('customer_equipment')->nullOnDelete();
             $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
             $table->string('warranty_number')->nullable();
             $table->string('provider'); // manufacturer, supplier, extended

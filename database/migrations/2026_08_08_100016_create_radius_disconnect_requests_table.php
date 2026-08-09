@@ -23,7 +23,7 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->ipAddress('ip_address')->nullable();
-            $table->userAgent()->nullable();
+            $table->string('user_agent')->nullable();
             $table->timestamps();
 
             $table->index(['tenant_id', 'radius_session_id', 'status']);

@@ -21,6 +21,7 @@ return new class extends Migration
             $table->json('required_equipment')->nullable(); // ["olt", "ont", "splicer"]
             $table->json('checklist')->nullable(); // Pre-defined checklist items
             $table->text('instructions')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->json('metadata')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();

@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('equipment_history', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('customer_equipment_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('customer_equipment_id')->constrained('customer_equipment')->cascadeOnDelete();
             $table->string('action'); // assigned, returned, transferred, replaced, configured, repaired, retired
             $table->string('field')->nullable(); // which field changed
             $table->text('old_value')->nullable();
@@ -21,7 +21,7 @@ return new class extends Migration
             $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('work_order_id')->nullable()->constrained()->nullOnDelete();
             $table->ipAddress('ip_address')->nullable();
-            $table->userAgent()->nullable();
+            $table->string('user_agent')->nullable();
             $table->json('meta')->nullable();
             $table->timestamps();
 

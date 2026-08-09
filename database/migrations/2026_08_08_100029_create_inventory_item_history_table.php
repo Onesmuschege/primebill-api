@@ -19,7 +19,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->foreignId('actor_id')->nullable()->constrained('users')->nullOnDelete();
             $table->ipAddress('ip_address')->nullable();
-            $table->userAgent()->nullable();
+            $table->string('user_agent')->nullable();
             $table->json('meta')->nullable();
             $table->timestamps();
 
