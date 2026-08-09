@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\ClientAccount;
+use App\Models\Tenant;
 use App\Services\Network\ProvisioningService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -16,21 +17,40 @@ class ProvisionClientAccountJob implements ShouldQueue
 
     public function __construct(
         public int $accountId,
-        public string $plainPassword
+        public string $plainPassword,
+        public ?int $tenantId = null
     ) {
         $this->onQueue(config('network.provisioning_queue', 'default'));
     }
 
     public function handle(ProvisioningService $provisioning): void
     {
-        $account = ClientAccount::with('plan')->find($this->accountId);
+        // Establish tenant context from the job payload so the global scope
+        // applies and this job can never operate on another tenant's data.
+        $this->establishTenantContext();
 
-        if (!$account) {
-            Log::warning('ProvisionClientAccountJob: account not found', ['id' => $this->accountId]);
+        try {
+            $account = ClientAccount::with('plan')->find($this->accountId);
 
-            return;
+            if (!$account) {
+                Log::warning('ProvisionClientAccountJob: account not found', ['id' => $this->accountId]);
+
+                return;
+            }
+
+            $provisioning->provisionAccount($account, $this->plainPassword);
+        } finally {
+            Tenant::setCurrent(null);
         }
+    }
 
-        $provisioning->provisionAccount($account, $this->plainPassword);
+    protected function establishTenantContext(): void
+    {
+        if ($this->tenantId) {
+            $tenant = Tenant::find($this->tenantId);
+            if ($tenant) {
+                Tenant::setCurrent($tenant);
+            }
+        }
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Tenant;
 use App\Services\Sms\SmsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,19 +28,37 @@ class SendSmsJob implements ShouldQueue
     protected string $phone;
     protected string $message;
     protected ?int $clientId;
+    protected ?int $tenantId;
 
-    public function __construct(string $phone, string $message, ?int $clientId = null)
+    public function __construct(string $phone, string $message, ?int $clientId = null, ?int $tenantId = null)
     {
         $this->phone    = $phone;
         $this->message  = $message;
         $this->clientId = $clientId;
+        $this->tenantId = $tenantId;
 
         $this->onQueue('sms');
     }
 
     public function handle(SmsService $smsService): void
     {
-        $smsService->send($this->phone, $this->message, $this->clientId);
+        $this->establishTenantContext();
+
+        try {
+            $smsService->send($this->phone, $this->message, $this->clientId);
+        } finally {
+            Tenant::setCurrent(null);
+        }
+    }
+
+    protected function establishTenantContext(): void
+    {
+        if ($this->tenantId) {
+            $tenant = Tenant::find($this->tenantId);
+            if ($tenant) {
+                Tenant::setCurrent($tenant);
+            }
+        }
     }
 
     public function failed(Throwable $e): void
@@ -47,6 +66,7 @@ class SendSmsJob implements ShouldQueue
         Log::error('SendSmsJob failed', [
             'phone' => $this->phone,
             'client_id' => $this->clientId,
+            'tenant_id' => $this->tenantId,
             'message_len' => strlen($this->message),
             'exception' => $e->getMessage(),
         ]);
