@@ -21,5 +21,6 @@ class Kernel extends HttpKernel
         // Existing aliases...
         'subscription.limits' => EnforceSubscriptionLimits::class,
         'feature' => \App\Http\Middleware\EnforceFeatureAccess::class,
+        'platform_admin' => \App\Http\Middleware\EnsurePlatformAdmin::class,
     ];
 }
