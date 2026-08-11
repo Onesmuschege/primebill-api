@@ -552,6 +552,9 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::post('/{workOrder}/status',[WorkOrderController::class, 'updateStatus'])->middleware('permission:edit work-orders');
     });
 
+        // Technicians list (all staff users with location/status + workload)
+    Route::get('/technicians', [WorkOrderController::class, 'listTechnicians'])->middleware('permission:view work-orders');
+
     // Technician workload
     Route::get('/technicians/{technician}/workload', [WorkOrderController::class, 'technicianWorkload'])->middleware('permission:view work-orders');
 

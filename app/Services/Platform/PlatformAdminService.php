@@ -307,7 +307,7 @@ class PlatformAdminService
             ->where('created_at', '>=', now()->subDays(7))
             ->selectRaw('ip_address, count(*) as attempts')
             ->groupBy('ip_address')
-            ->having('attempts', '>', 5)
+            ->havingRaw('count(*) > ?', [5])
             ->orderByDesc('attempts')
             ->limit(10)
             ->get()

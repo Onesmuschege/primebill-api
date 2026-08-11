@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\WorkOrder\StoreWorkOrderRequest;
 use App\Http\Requests\WorkOrder\UpdateWorkOrderRequest;
 use App\Models\Client;
+use App\Models\TechnicianLocation;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkOrder;
+use Illuminate\Support\Facades\Auth;
 use App\Services\FieldOperations\WorkOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -125,9 +128,75 @@ class WorkOrderController extends Controller
     {
         $workload = $this->workOrders->getTechnicianWorkload($technician);
 
-        return response()->json([
+                return response()->json([
             'success' => true,
             'data' => $workload,
+        ]);
+    }
+
+    /**
+     * GET /api/technicians
+     *
+     * Returns all technicians (staff users) in the current tenant with their
+     * current location/status snapshot and active workload count.
+     */
+    public function listTechnicians(): JsonResponse
+    {
+        $tenant = Tenant::current();
+
+        $technicians = User::query()
+            ->when($tenant, fn($q) => $q->where('tenant_id', $tenant->id))
+            ->whereHas('roles', function ($q) {
+                $q->whereIn('name', ['staff', 'super_admin', 'admin']);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'email']);
+
+        $result = $technicians->map(function ($tech) use ($tenant) {
+            $tenantId = $tenant?->id;
+
+            $location = TechnicianLocation::query()
+                ->when($tenantId, fn($q) => $q->where('tenant_id', $tenantId))
+                ->where('user_id', $tech->id)
+                ->latest('reported_at')
+                ->first();
+
+            $workload = WorkOrder::query()
+                ->when($tenantId, fn($q) => $q->where('tenant_id', $tenantId))
+                ->where('assigned_to', $tech->id)
+                ->whereIn('status', ['scheduled', 'dispatched', 'in_progress'])
+                ->count();
+
+            $status = $location?->status ?? 'offline';
+
+            return [
+                'id'       => $tech->id,
+                'name'     => $tech->name,
+                'email'    => $tech->email,
+                'status'   => $status,
+                'location' => $location
+                    ? ($location->latitude && $location->longitude
+                        ? round((float) $location->latitude, 5) . ', ' . round((float) $location->longitude, 5)
+                        : 'Office')
+                    : 'Office',
+                'workload' => $workload,
+            ];
+        });
+
+        $statistics = [
+            'total'    => $result->count(),
+            'available'=> $result->where('status', 'available')->count(),
+            'busy'     => $result->whereIn('status', ['busy', 'on_break'])->count(),
+            'offline'  => $result->where('status', 'offline')->count(),
+            'workload' => $result->sum('workload'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'technicians'  => $result,
+                'statistics'   => $statistics,
+            ],
         ]);
     }
 }
