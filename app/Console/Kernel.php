@@ -45,6 +45,9 @@ class Kernel extends ConsoleKernel
         // Network Core — retry failed provisioning/CoA operations every 15 minutes
         $schedule->command('network:retry-failed-provisioning')->everyFifteenMinutes();
 
+        // Service Desk — evaluate ticket SLA targets, mark breaches and auto-escalate every 15 minutes
+        $schedule->command('sla:evaluate')->everyFifteenMinutes();
+
                 // Network Core — sync RADIUS users from billing to FreeRADIUS daily at 2 AM
         $schedule->command('radius:sync-users')->dailyAt('02:00');
 

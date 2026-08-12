@@ -13,10 +13,18 @@ class Ticket extends Model
     protected $fillable = [
         'client_id', 'assigned_to', 'subject',
         'description', 'priority', 'status', 'closed_at',
+        'sla_policy_id', 'first_responded_at',
+        'sla_response_due_at', 'sla_resolution_due_at',
+        'sla_breached', 'last_sla_evaluated_at',
     ];
 
     protected $casts = [
-        'closed_at' => 'datetime',
+        'closed_at'             => 'datetime',
+        'first_responded_at'    => 'datetime',
+        'sla_response_due_at'   => 'datetime',
+        'sla_resolution_due_at' => 'datetime',
+        'last_sla_evaluated_at' => 'datetime',
+        'sla_breached'          => 'boolean',
     ];
 
     public function client()
@@ -32,5 +40,15 @@ class Ticket extends Model
     public function replies()
     {
         return $this->hasMany(TicketReply::class);
+    }
+
+    public function slaPolicy()
+    {
+        return $this->belongsTo(SlaPolicy::class);
+    }
+
+    public function escalations()
+    {
+        return $this->hasMany(TicketEscalation::class);
     }
 }

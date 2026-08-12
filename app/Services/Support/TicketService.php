@@ -49,6 +49,8 @@ class TicketService
 
         $ticket = Ticket::create($data);
 
+        app(SlaService::class)->applyPolicy($ticket);
+
         SystemLog::create([
             'user_id'    => $userId,
             'action'     => 'created ticket',
@@ -72,6 +74,11 @@ class TicketService
         // Update ticket status to pending if open
         if ($ticket->status === 'open') {
             $ticket->update(['status' => 'pending']);
+        }
+
+        // Record SLA first-response timestamp on the first non-internal reply
+        if (!$reply->is_internal) {
+            app(SlaService::class)->markResponded($ticket);
         }
 
         // Notify client via SMS if not internal note

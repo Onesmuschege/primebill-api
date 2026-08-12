@@ -76,6 +76,11 @@ class SlaPolicy extends Model
         return $this->hasMany(TicketEscalation::class);
     }
 
+    public function rules(): HasMany
+    {
+        return $this->hasMany(SlaRule::class);
+    }
+
     public function isActive(): bool
     {
         return $this->is_active;
