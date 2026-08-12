@@ -349,8 +349,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage security-admin',
             'view field-ops',
             'manage field-ops',
-            'view reporting',
+                        'view reporting',
             'manage reporting',
+
+            // RMA (Returns / Replacements / Repairs) — Phase 4 (Field Operations)
+            'view rmas',
+            'create rmas',
+            'edit rmas',
+            'delete rmas',
         ];
 
         /*
@@ -566,8 +572,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage security-admin',
             'view field-ops',
             'manage field-ops',
-            'view reporting',
+                        'view reporting',
             'manage reporting',
+
+            // RMA (Returns / Replacements / Repairs) — Phase 4 (Field Operations)
+            'view rmas',
+            'create rmas',
+            'edit rmas',
+            'delete rmas',
         ]);
 
         /*
@@ -637,8 +649,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // Inventory
             'view inventory',
 
-            // NOC (view-only for staff)
+                        // NOC (view-only for staff)
             'view network',
+            'view rmas',
         ]);
 
         /*
