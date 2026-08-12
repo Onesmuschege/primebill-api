@@ -10,6 +10,8 @@ use App\Models\TechnicianLocation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderPart;
+use App\Models\WorkOrderAttachment;
 use Illuminate\Support\Facades\Auth;
 use App\Services\FieldOperations\WorkOrderService;
 use Illuminate\Http\JsonResponse;
@@ -198,5 +200,81 @@ class WorkOrderController extends Controller
                 'statistics'   => $statistics,
             ],
         ]);
+    }
+
+    /**
+     * Materials used on a work order (Release 4 — field operations).
+     */
+    public function parts(WorkOrder $workOrder): JsonResponse
+    {
+        $parts = WorkOrderPart::query()
+            ->where('work_order_id', $workOrder->id)
+            ->with('inventoryItem')
+            ->orderByDesc('id')
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $parts]);
+    }
+
+    public function addPart(Request $request, WorkOrder $workOrder): JsonResponse
+    {
+        $data = $request->validate([
+            'part_name'         => ['required', 'string', 'max:191'],
+            'part_number'       => ['nullable', 'string', 'max:191'],
+            'serial_number'     => ['nullable', 'string', 'max:191'],
+            'inventory_item_id' => ['nullable', 'exists:inventory_items,id'],
+            'quantity'          => ['nullable', 'integer', 'min:1'],
+            'unit_cost'         => ['nullable', 'numeric', 'min:0'],
+            'status'            => ['nullable', Rule::In(['planned', 'ordered', 'received', 'installed', 'returned'])],
+            'notes'             => ['nullable', 'string'],
+        ]);
+
+        $data['tenant_id']    = $workOrder->tenant_id;
+        $data['work_order_id']= $workOrder->id;
+        $data['created_by']   = Auth::id();
+        $data['updated_by']   = Auth::id();
+
+        if (isset($data['quantity'], $data['unit_cost'])) {
+            $data['total_cost'] = (int) $data['quantity'] * (float) $data['unit_cost'];
+        }
+
+        $part = WorkOrderPart::create($data);
+
+        return response()->json(['success' => true, 'message' => 'Part added', 'data' => $part], 201);
+    }
+
+    /**
+     * Evidence attached to a work order (photo / document / signature / receipt).
+     */
+    public function attachments(WorkOrder $workOrder): JsonResponse
+    {
+        $attachments = WorkOrderAttachment::query()
+            ->where('work_order_id', $workOrder->id)
+            ->with('uploadedBy')
+            ->orderByDesc('id')
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $attachments]);
+    }
+
+    public function addAttachment(Request $request, WorkOrder $workOrder): JsonResponse
+    {
+        $data = $request->validate([
+            'file_name'    => ['required', 'string', 'max:191'],
+            'file_path'    => ['required', 'string', 'max:191'],
+            'file_type'    => ['nullable', 'string', 'max:191'],
+            'file_size'    => ['nullable', 'integer', 'min:0'],
+            'category'     => ['nullable', Rule::In(['photo', 'document', 'signature', 'receipt'])],
+            'description'  => ['nullable', 'string'],
+            'metadata'     => ['nullable', 'array'],
+        ]);
+
+        $data['tenant_id']     = $workOrder->tenant_id;
+        $data['work_order_id'] = $workOrder->id;
+        $data['uploaded_by']   = Auth::id();
+
+        $attachment = WorkOrderAttachment::create($data);
+
+        return response()->json(['success' => true, 'message' => 'Evidence attached', 'data' => $attachment], 201);
     }
 }

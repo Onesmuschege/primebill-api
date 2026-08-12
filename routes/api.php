@@ -55,6 +55,7 @@ use App\Http\Controllers\Api\ClientCustomFieldController;
 use App\Http\Controllers\Api\WorkOrderController;
 use App\Http\Controllers\Api\OltController;
 use App\Http\Controllers\Api\FiberController;
+use App\Http\Controllers\Api\FiberCapacityController;
 use App\Http\Controllers\Api\NocController;
 use App\Http\Controllers\Api\IpamController;
 use App\Http\Controllers\Api\MfaController;
@@ -572,6 +573,10 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::delete('/{workOrder}',     [WorkOrderController::class, 'destroy'])->middleware('permission:delete work-orders');
         Route::post('/{workOrder}/assign',[WorkOrderController::class, 'assignTechnician'])->middleware('permission:edit work-orders');
         Route::post('/{workOrder}/status',[WorkOrderController::class, 'updateStatus'])->middleware('permission:edit work-orders');
+        Route::get('/{workOrder}/parts',       [WorkOrderController::class, 'parts']);
+        Route::post('/{workOrder}/parts',      [WorkOrderController::class, 'addPart'])->middleware('permission:edit work-orders');
+        Route::get('/{workOrder}/attachments', [WorkOrderController::class, 'attachments']);
+        Route::post('/{workOrder}/attachments',[WorkOrderController::class, 'addAttachment'])->middleware('permission:edit work-orders');
     });
 
         // Technicians list (all staff users with location/status + workload)
@@ -737,6 +742,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
 
     // Fiber infrastructure — routes, splitters, cabinets, distribution points
     Route::prefix('fiber')->middleware('permission:view fiber')->group(function () {
+        Route::get('/capacity',        [FiberCapacityController::class, 'capacity']);
         Route::get('/routes',          [FiberController::class, 'routesIndex']);
         Route::post('/routes',         [FiberController::class, 'routesStore'])->middleware('permission:manage fiber');
         Route::put('/routes/{fiberRoute}',   [FiberController::class, 'routesUpdate'])->middleware('permission:manage fiber');
