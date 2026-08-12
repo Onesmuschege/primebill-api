@@ -4,6 +4,7 @@ namespace App\Services\Network;
 
 use App\Models\ClientAccount;
 use App\Models\FupLog;
+use App\Services\Radius\RadiusControlService;
 
 /**
  * Fair Usage Policy (FUP) service.
