@@ -224,4 +224,63 @@ class MikroTikService
             return false;
         }
     }
+
+    /**
+     * Create (or update) a PPP profile carrying the plan's rate limit.
+     * MikroTik rate-limit syntax: "<rx>/<tx>" where rx is download.
+     */
+    public function upsertPppProfile(string $name, string $rateLimit): bool
+    {
+        try {
+            $existing = $this->client->query(
+                (new Query('/ppp/profile/print'))->where('name', $name)
+            )->read();
+
+            if (!empty($existing[0]['.id'])) {
+                $query = new Query('/ppp/profile/set');
+                $query->equal('.id', $existing[0]['.id']);
+                $query->equal('rate-limit', $rateLimit);
+            } else {
+                $query = new Query('/ppp/profile/add');
+                $query->equal('name', $name);
+                $query->equal('rate-limit', $rateLimit);
+            }
+
+            $this->client->query($query)->read();
+
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Create (or update) a hotspot user profile carrying the plan's rate
+     * limit. Used for hotspot plans where the router (not RADIUS) enforces
+     * per-user queues.
+     */
+    public function upsertHotspotProfile(string $name, string $rateLimit): bool
+    {
+        try {
+            $existing = $this->client->query(
+                (new Query('/ip/hotspot/user/profile/print'))->where('name', $name)
+            )->read();
+
+            if (!empty($existing[0]['.id'])) {
+                $query = new Query('/ip/hotspot/user/profile/set');
+                $query->equal('.id', $existing[0]['.id']);
+                $query->equal('rate-limit', $rateLimit);
+            } else {
+                $query = new Query('/ip/hotspot/user/profile/add');
+                $query->equal('name', $name);
+                $query->equal('rate-limit', $rateLimit);
+            }
+
+            $this->client->query($query)->read();
+
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
 }

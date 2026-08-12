@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Concerns\BelongsToTenant;
 use App\Traits\LogsAudit;
@@ -11,7 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 
 class Client extends Authenticatable
 {
-    use HasApiTokens, HasFactory, BelongsToTenant, SoftDeletes, LogsAudit;
+    use HasApiTokens, Notifiable, HasFactory, BelongsToTenant, SoftDeletes, LogsAudit;
 
     protected string $auditAlias = 'Client';
 

@@ -137,4 +137,34 @@ class LoyaltyTest extends TestCase
         $this->client->refresh();
         $this->assertEquals(500, $this->client->loyalty_points_balance);
     }
+
+    public function test_admin_can_adjust_client_points(): void
+    {
+        $response = $this->postJson("/api/loyalty/{$this->client->id}/adjust", [
+            'points' => 200,
+            'reason' => 'Manual bonus',
+        ], [
+            'Authorization' => "Bearer {$this->token}",
+        ]);
+
+        $response->assertStatus(200)
+                 ->assertJsonPath('success', true)
+                 ->assertJsonPath('data.balance', 700);
+
+        $this->assertDatabaseHas('loyalty_points', [
+            'client_id' => $this->client->id,
+            'points'    => 200,
+            'type'      => 'adjustment',
+        ]);
+
+        // Negative adjustment deducts.
+        $response = $this->postJson("/api/loyalty/{$this->client->id}/adjust", [
+            'points' => -100,
+            'reason' => 'Correction',
+        ], [
+            'Authorization' => "Bearer {$this->token}",
+        ]);
+
+        $response->assertJsonPath('data.balance', 600);
+    }
 }

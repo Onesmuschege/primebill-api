@@ -289,9 +289,13 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
     Route::prefix('plans')->middleware('permission:view plans')->group(function () {
         Route::get('/',              [PlanController::class, 'index']);
         Route::post('/',             [PlanController::class, 'store'])->middleware('permission:create plans');
+        Route::post('/bulk/update',  [PlanController::class, 'bulkUpdate'])->middleware('permission:edit plans');
         Route::get('/{plan}',        [PlanController::class, 'show']);
         Route::put('/{plan}',        [PlanController::class, 'update'])->middleware('permission:edit plans');
         Route::delete('/{plan}',     [PlanController::class, 'destroy'])->middleware('permission:delete plans');
+        Route::post('/{plan}/duplicate',      [PlanController::class, 'duplicate'])->middleware('permission:create plans');
+        Route::post('/{plan}/toggle-active',  [PlanController::class, 'toggleActive'])->middleware('permission:edit plans');
+        Route::post('/{plan}/push-to-router', [PlanController::class, 'pushToRouter'])->middleware('permission:edit plans');
         Route::get('/{plan}/clients',[PlanController::class, 'clients']);
         Route::post('/{plan}/assign',[PlanController::class, 'assign'])->middleware('permission:edit clients');
     });
@@ -532,6 +536,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::get('/transactions',       [LoyaltyController::class, 'transactions']);
         Route::get('/points/{clientId}',  [LoyaltyController::class, 'getPoints']);
         Route::post('/redeem',            [LoyaltyController::class, 'redeem']);
+        Route::post('/{client}/adjust',   [LoyaltyController::class, 'adjust'])->middleware('permission:manage loyalty');
     });
 
     // Referral

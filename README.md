@@ -136,7 +136,7 @@ Email:    {slug}.staff@primebill.test
 Email:    {slug}.support@primebill.test
 Email:    {slug}.technician@primebill.test
 Email:    {slug}.finance@primebill.test
-Password: Demo@2026  (set via SEED_DEMO_PASSWORD in .env)
+Password: Demo@1234  (config default; override via SEED_DEMO_PASSWORD in .env)
 ```
 
 The **Platform Admin** (`is_platform_admin = true`) is not seeded automatically. Create it manually:
@@ -169,10 +169,11 @@ Key `.env` variables:
 
 ## Known gaps
 
-1. Expand automated tests for billing reconciliation, M-Pesa idempotency, RADIUS webhook ingestion, router provisioning, and tenancy-isolation checks.
-2. Add production observability (Sentry/Datadog), queue monitoring, and alerts for failed scheduled jobs.
-3. Implement queued bulk report/export jobs (PDF/CSV/Excel) with storage for large exports.
-4. Several catalog domains (IPAM, support catalog, communications, customer experience, security admin, field ops, reporting tools) have backend routes but frontend pages are minimal or missing.
+1. **Live network integrations require reachable hardware.** The MikroTik/FreeRADIUS/OLT adapters are implemented and wired (with Mock adapters for dev/testing), but pushing plan profiles or provisioning accounts to physical routers requires a live, reachable device with valid credentials (`NETWORK_ROUTER_DRIVER=mikrotik`, `RADIUS_DRIVER=freeradius`). The API returns clear errors when a router is unreachable rather than pretending a sync succeeded.
+2. **M-Pesa / SMS require real provider credentials** (`MPESA_CONSUMER_KEY/SECRET`, passkey, shortcode; `SMS_GATEWAY` account keys). The callbacks and idempotency are implemented and unit-tested in sandbox mode, but live traffic needs a registered Daraja app and SMS account.
+3. **Billing reconciliation** runs through the ledger/allocations engine, but a dedicated automated monthly-reconciliation report is not yet built.
+4. Add production observability (Sentry/Datadog), queue monitoring, and alerts for failed scheduled jobs.
+5. Some advanced catalog domains (IPAM, support catalog, communications, customer experience, security admin, field ops, reporting tools) have full backend routes and matching frontend pages, but a few secondary pages (e.g. plan "template" quick-create only) remain thin.
 
 ---
 
