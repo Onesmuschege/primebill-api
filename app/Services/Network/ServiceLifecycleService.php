@@ -83,4 +83,64 @@ class ServiceLifecycleService
             'radius_ok' => $radiusOk,
         ]);
     }
+
+    /**
+     * Reconcile billing entitlement with network state for all tenants.
+     *
+     * For every active account:
+     *   - if its client is NOT entitled (suspended/inactive/disabled) or the
+     *     client has overdue debt, suspend the service (billing suspension ->
+     *     RADIUS/MikroTik restriction, then audit).
+     *   - if the account is suspended but its client IS entitled and has no
+     *     overdue debt, restore the service (payment -> reactivation ->
+     *     RADIUS/MikroTik, then audit).
+     *
+     * This is the enforcement loop behind `network:reconcile-entitlements`,
+     * keeping billing state and network state from silently diverging.
+     *
+     * @return array{suspended:int,restored:int,checked:int}
+     */
+    public function reconcileAll(): array
+    {
+        $stats = ['suspended' => 0, 'restored' => 0, 'checked' => 0];
+
+        foreach (\App\Models\Tenant::query()->cursor() as $tenant) {
+            \App\Models\Tenant::setCurrent($tenant);
+
+            try {
+                $accounts = ClientAccount::with('client')
+                    ->whereIn('status', ['active', 'suspended'])
+                    ->get();
+
+                foreach ($accounts as $account) {
+                    $client = $account->client;
+                    if (!$client) {
+                        continue;
+                    }
+
+                    $stats['checked']++;
+
+                    $hasOverdue = $client->invoices()
+                        ->whereIn('status', ['overdue', 'unpaid'])
+                        ->where('due_date', '<', now())
+                        ->exists();
+
+                    $entitled = in_array($client->status, ['active', 'trial', 'provisioned'])
+                        && !$hasOverdue;
+
+                    if (!$entitled && $account->status === 'active') {
+                        $this->suspend($account, 'entitlement-reconcile: no active entitlement');
+                        $stats['suspended']++;
+                    } elseif ($entitled && $account->status === 'suspended') {
+                        $this->activate($account, 'entitlement-reconcile: entitled');
+                        $stats['restored']++;
+                    }
+                }
+            } finally {
+                \App\Models\Tenant::setCurrent(null);
+            }
+        }
+
+        return $stats;
+    }
 }

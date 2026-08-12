@@ -45,11 +45,11 @@ class Kernel extends ConsoleKernel
         // Network Core — retry failed provisioning/CoA operations every 15 minutes
         $schedule->command('network:retry-failed-provisioning')->everyFifteenMinutes();
 
-        // Network Core — sync RADIUS users from billing to FreeRADIUS daily at 2 AM
-        $schedule->command('network:sync-radius')->dailyAt('02:00');
+                // Network Core — sync RADIUS users from billing to FreeRADIUS daily at 2 AM
+        $schedule->command('radius:sync-users')->dailyAt('02:00');
 
         // Network Core — clean old logs after 90 days
-        $schedule->command('network:clean-logs')->dailyAt('03:00');
+        $schedule->command('logs:clean')->dailyAt('03:00');
     }
 
     /**

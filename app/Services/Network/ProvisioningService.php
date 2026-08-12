@@ -19,7 +19,7 @@ class ProvisioningService
         $account->loadMissing('plan');
 
         if (!$account->plan) {
-            $this->log("Skipped provisioning for {$account->username}: no plan assigned");
+            $this->log($account, 'provision', 'failed', null, null, 'No plan assigned', "Skipped provisioning for {$account->username}: no plan assigned");
 
             return false;
         }
@@ -42,12 +42,22 @@ class ProvisioningService
 
         $success = $routerOk && $radiusOk;
 
-        $this->log(sprintf(
-            'Provisioned account %s (router=%s, radius=%s)',
-            $account->username,
-            $routerOk ? 'ok' : 'fail',
-            $radiusOk ? 'ok' : 'fail'
-        ));
+        $status = $success ? 'success' : ($routerOk !== $radiusOk ? 'partial' : 'failed');
+
+        $this->log(
+            $account,
+            'provision',
+            $status,
+            $routerOk,
+            $radiusOk,
+            $this->failureReason('provision', $routerOk, $radiusOk),
+            sprintf(
+                'Provisioned account %s (router=%s, radius=%s)',
+                $account->username,
+                $routerOk ? 'ok' : 'fail',
+                $radiusOk ? 'ok' : 'fail'
+            )
+        );
 
         if (!$success) {
             Log::warning('ProvisioningService: partial failure', [
@@ -65,9 +75,18 @@ class ProvisioningService
         $routerOk = $this->routerAdapter->suspendUser($account->username);
         $radiusOk = $this->radiusAdapter->suspendUser($account->username);
 
-        $this->log("Suspended account {$account->username} (router={$routerOk}, radius={$radiusOk})");
+        $success = $routerOk && $radiusOk;
+        $this->log(
+            $account,
+            'suspend',
+            $success ? 'success' : ($routerOk !== $radiusOk ? 'partial' : 'failed'),
+            $routerOk,
+            $radiusOk,
+            $this->failureReason('suspend', $routerOk, $radiusOk),
+            "Suspended account {$account->username} (router={$routerOk}, radius={$radiusOk})"
+        );
 
-        return $routerOk && $radiusOk;
+        return $success;
     }
 
     public function activateAccount(ClientAccount $account): bool
@@ -75,9 +94,18 @@ class ProvisioningService
         $routerOk = $this->routerAdapter->unsuspendUser($account->username);
         $radiusOk = $this->radiusAdapter->unsuspendUser($account->username);
 
-        $this->log("Activated account {$account->username} (router={$routerOk}, radius={$radiusOk})");
+        $success = $routerOk && $radiusOk;
+        $this->log(
+            $account,
+            'activate',
+            $success ? 'success' : ($routerOk !== $radiusOk ? 'partial' : 'failed'),
+            $routerOk,
+            $radiusOk,
+            $this->failureReason('activate', $routerOk, $radiusOk),
+            "Activated account {$account->username} (router={$routerOk}, radius={$radiusOk})"
+        );
 
-        return $routerOk && $radiusOk;
+        return $success;
     }
 
     public function deprovisionAccount(ClientAccount $account, ?int $routerId = null): bool
@@ -85,9 +113,18 @@ class ProvisioningService
         $routerOk = $this->routerAdapter->deleteUser($account->username);
         $radiusOk = $this->radiusAdapter->deleteUser($account->username);
 
-        $this->log("Deprovisioned account {$account->username}");
+        $success = $routerOk && $radiusOk;
+        $this->log(
+            $account,
+            'deprovision',
+            $success ? 'success' : 'failed',
+            $routerOk,
+            $radiusOk,
+            $this->failureReason('deprovision', $routerOk, $radiusOk),
+            "Deprovisioned account {$account->username}"
+        );
 
-        return $routerOk && $radiusOk;
+        return $success;
     }
 
     public function deprovisionUsername(string $username): bool
@@ -95,9 +132,18 @@ class ProvisioningService
         $routerOk = $this->routerAdapter->deleteUser($username);
         $radiusOk = $this->radiusAdapter->deleteUser($username);
 
-        $this->log("Deprovisioned username {$username}");
+        $success = $routerOk && $radiusOk;
+        $this->log(
+            null,
+            'deprovision',
+            $success ? 'success' : 'failed',
+            $routerOk,
+            $radiusOk,
+            $this->failureReason('deprovision', $routerOk, $radiusOk),
+            "Deprovisioned username {$username}"
+        );
 
-        return $routerOk && $radiusOk;
+        return $success;
     }
 
     public function suspendClientAccounts(int $clientId): void
@@ -123,9 +169,33 @@ class ProvisioningService
         return "{$up}k/{$down}k";
     }
 
-    protected function log(string $message): void
+    /**
+     * Record a structured provisioning outcome.
+     */
+    protected function log(?ClientAccount $account, string $operation, string $status, ?bool $routerOk, ?bool $radiusOk, ?string $failureReason, string $message): void
     {
-        MikrotikSyncLog::create(['log_message' => $message]);
+        MikrotikSyncLog::create([
+            'client_account_id' => $account?->id,
+            'operation'         => $operation,
+            'status'            => $status,
+            'router_ok'         => $routerOk,
+            'radius_ok'         => $radiusOk,
+            'failure_reason'    => $failureReason,
+            'log_message'       => $message,
+        ]);
         Log::info('ProvisioningService: ' . $message);
+    }
+
+        protected function failureReason(string $operation, bool $routerOk, bool $radiusOk): ?string
+    {
+        $parts = [];
+        if (!$routerOk) {
+            $parts[] = 'router adapter failed';
+        }
+        if (!$radiusOk) {
+            $parts[] = 'radius adapter failed';
+        }
+
+                return $parts ? $operation . ': ' . implode(', ', $parts) : null;
     }
 }

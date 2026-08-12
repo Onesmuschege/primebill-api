@@ -10,16 +10,19 @@ use App\Models\Client;
 use App\Models\ClientAccount;
 use App\Models\Plan;
 use App\Services\Plan\PlanService;
+use App\Services\Network\MikroTikService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class PlanController extends Controller
 {
     protected PlanService $planService;
+    protected MikroTikService $mikrotik;
 
-    public function __construct(PlanService $planService)
+    public function __construct(PlanService $planService, MikroTikService $mikrotik)
     {
         $this->planService = $planService;
+        $this->mikrotik    = $mikrotik;
     }
 
     // GET /api/plans
@@ -130,6 +133,118 @@ class PlanController extends Controller
             'message' => 'Plan assigned and provisioning queued',
             'data'    => $account->load('plan', 'client'),
         ], 201);
+    }
+
+    // POST /api/plans/{id}/duplicate
+    public function duplicate(Request $request, Plan $plan)
+    {
+        $copy = $this->planService->duplicatePlan($plan, $request->user()->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Plan duplicated successfully',
+            'data'    => $copy,
+        ], 201);
+    }
+
+    // POST /api/plans/{id}/toggle-active
+    public function toggleActive(Request $request, Plan $plan)
+    {
+        $plan = $this->planService->togglePlanActive($plan, $request->user()->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => $plan->is_active ? 'Plan activated' : 'Plan deactivated',
+            'data'    => $plan,
+        ]);
+    }
+
+    // POST /api/plans/bulk/update
+    public function bulkUpdate(Request $request)
+    {
+        $request->validate([
+            'ids'            => 'required|array|min:1',
+            'ids.*'          => 'integer|exists:plans,id',
+            'speed_up'       => 'nullable|integer|min:1',
+            'speed_down'     => 'nullable|integer|min:1',
+            'burst_up'       => 'nullable|integer|min:0',
+            'burst_down'     => 'nullable|integer|min:0',
+            'fup_limit'      => 'nullable|integer|min:0',
+            'fup_speed_up'   => 'nullable|integer|min:0',
+            'fup_speed_down' => 'nullable|integer|min:0',
+        ]);
+
+        $count = $this->planService->bulkUpdatePlans(
+            $request->ids,
+            $request->only(['speed_up', 'speed_down', 'burst_up', 'burst_down', 'fup_limit', 'fup_speed_up', 'fup_speed_down']),
+            $request->user()->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$count} plan(s) updated",
+            'data'    => ['updated' => $count],
+        ]);
+    }
+
+    // POST /api/plans/{id}/push-to-router
+    // Applies the plan's bandwidth profile to the MikroTik router assigned to
+    // the plan. Requires a reachable router — otherwise a clear error is
+    // returned so nobody mistakes a pending/offline sync for a success.
+    public function pushToRouter(Request $request, Plan $plan)
+    {
+        if (! $plan->router_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This plan has no router assigned. Edit the plan and choose a router first.',
+                'errors'  => null,
+            ], 422);
+        }
+
+        $router = $plan->router;
+
+        if (! $this->mikrotik->connect($router)) {
+            $router->update(['status' => 'offline']);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Router is unreachable. Configure NETWORK_ADAPTER=mikrotik with valid router credentials and bring the router online before pushing plan profiles.',
+                'errors'  => null,
+            ], 502);
+        }
+
+        // MikroTik rate-limit syntax: "<rx>/<tx>" (rx = download, tx = upload).
+        $rateLimit = sprintf('%dk/%dk', $plan->speed_down ?? 1024, $plan->speed_up ?? 512);
+
+        if ($plan->type === 'hotspot') {
+            $ok = $this->mikrotik->upsertHotspotProfile($plan->name, $rateLimit);
+        } else {
+            $ok = $this->mikrotik->upsertPppProfile($plan->name, $rateLimit);
+        }
+
+        if (! $ok) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Router accepted the connection but rejected the profile push. Check RouterOS permissions and profile capacity.',
+                'errors'  => null,
+            ], 502);
+        }
+
+        $router->update(['status' => 'online', 'last_seen' => now()]);
+
+        \App\Models\SystemLog::create([
+            'user_id'    => $request->user()->id,
+            'action'     => 'pushed plan to router',
+            'model'      => 'Plan',
+            'model_id'   => $plan->id,
+            'new_values' => ['router_id' => $router->id, 'profile' => $plan->name, 'rate_limit' => $rateLimit],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Plan profile '{$plan->name}' pushed to {$router->name} ({$rateLimit})",
+            'data'    => ['router' => $router->id, 'profile' => $plan->name, 'rate_limit' => $rateLimit],
+        ]);
     }
 
     // GET /api/plan-templates

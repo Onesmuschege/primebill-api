@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\SystemLog;
+use App\Notifications\InvoiceCreated;
 use App\Services\Settings\SettingsService;
 use Illuminate\Http\Request;
 
@@ -95,6 +96,13 @@ class InvoiceService
             'model_id'   => $invoice->id,
             'new_values' => $data,
         ]);
+
+        // Notify the client that a new invoice was issued (mail-only; skips
+        // clients without an email address).
+        $client = $invoice->client;
+        if ($client && $client->email) {
+            $client->notify(new InvoiceCreated($invoice));
+        }
 
         return $invoice->load('client', 'taxLines', 'discountLines');
     }
