@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ExpenditureController;
 use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\InventoryController;
+use App\Http\Controllers\Api\RmaController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Portal\PortalAuthController;
@@ -454,6 +455,22 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
     });
 
     // Inventory
+        // ── RMA (Return / Replacement / Repair Authorisation) ────────────────────
+    Route::prefix('rma')->middleware(['auth:sanctum', 'tenant', 'permission:view rmas'])->group(function () {
+        Route::get('/',                  [RmaController::class, 'index']);
+        Route::post('/',                 [RmaController::class, 'store'])->middleware('permission:create rmas');
+        Route::get('/stats',             [RmaController::class, 'stats']);
+        Route::get('/{rma}',             [RmaController::class, 'show']);
+        Route::put('/{rma}',             [RmaController::class, 'update'])->middleware('permission:edit rmas');
+        Route::delete('/{rma}',          [RmaController::class, 'destroy'])->middleware('permission:delete rmas');
+
+        Route::post('/{rma}/approve',    [RmaController::class, 'approve'])->middleware('permission:edit rmas');
+        Route::post('/{rma}/reject',     [RmaController::class, 'reject'])->middleware('permission:edit rmas');
+        Route::post('/{rma}/process',    [RmaController::class, 'process'])->middleware('permission:edit rmas');
+        Route::post('/{rma}/complete',   [RmaController::class, 'complete'])->middleware('permission:edit rmas');
+        Route::post('/{rma}/cancel',     [RmaController::class, 'cancel'])->middleware('permission:edit rmas');
+    });
+
     Route::prefix('inventory')->middleware('permission:view inventory')->group(function () {
         Route::get('/low-stock',          [InventoryController::class, 'lowStock']);
         Route::get('/assigned',           [InventoryController::class, 'assigned']);
