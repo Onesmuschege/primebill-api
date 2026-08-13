@@ -34,8 +34,16 @@ class DunningRun extends Model
         return $this->belongsTo(Invoice::class);
     }
 
-    public function dunningStep(): BelongsTo
+        public function dunningStep(): BelongsTo
     {
         return $this->belongsTo(DunningStep::class);
+    }
+
+    /**
+     * Short alias used by eager-loading in collections API responses.
+     */
+    public function step(): BelongsTo
+    {
+        return $this->dunningStep();
     }
 }

@@ -80,6 +80,14 @@ class Invoice extends Model
         return $this->hasMany(PaymentPlan::class);
     }
 
+    /**
+     * Collections — history of dunning steps executed against this invoice.
+     */
+    public function dunningRuns()
+    {
+        return $this->hasMany(DunningRun::class);
+    }
+
     public function getBalanceAttribute(): float
     {
         $paid = (float) $this->payments()

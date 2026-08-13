@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Listeners\AutomationListener;
 use App\Models\AutomationRule;
+use App\Models\Client;
 use App\Models\Device;
 use App\Models\Invoice;
 use App\Models\Olt;
@@ -11,6 +12,7 @@ use App\Models\Payment;
 use App\Models\Ticket;
 use App\Models\WorkOrder;
 use App\Models\CustomerSubscription;
+use App\Observers\ClientObserver;
 use App\Observers\CustomerSubscriptionObserver;
 use App\Observers\DeviceObserver;
 use App\Observers\InvoiceObserver;
@@ -39,7 +41,10 @@ class AutomationServiceProvider extends ServiceProvider
             }
         }
 
-        // Model observers fire events from the operational moments.
+                // Model observers fire events from the operational moments.
+        // Client is registered first so ClientCreated/ClientUpdated reach the
+        // automation pipeline (config/automation.php event list).
+        Client::observe(ClientObserver::class);
         Payment::observe(PaymentObserver::class);
         Invoice::observe(InvoiceObserver::class);
         CustomerSubscription::observe(CustomerSubscriptionObserver::class);

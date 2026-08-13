@@ -128,8 +128,16 @@ class Client extends Authenticatable
         return $this->hasOne(Lead::class, 'converted_to_client_id');
     }
 
-    public function prospect()
+         public function prospect()
     {
         return $this->hasOne(Prospect::class, 'converted_to_client_id');
+    }
+
+    /**
+     * Collections — history of dunning steps executed against this client.
+     */
+    public function dunningRuns()
+    {
+        return $this->hasMany(DunningRun::class);
     }
 }

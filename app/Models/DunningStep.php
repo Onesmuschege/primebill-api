@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use App\Traits\LogsAudit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Concerns\BelongsToTenant;
 
 class DunningStep extends Model
 {
-    use BelongsToTenant;
+    use BelongsToTenant, LogsAudit;
+
+    protected string $auditAlias = 'DunningStep';
 
     protected $fillable = [
         'tenant_id',

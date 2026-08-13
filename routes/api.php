@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\RouterController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentAllocationController;
+use App\Http\Controllers\Api\CollectionsController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\MpesaController;
 use App\Http\Controllers\Api\SmsController;
@@ -402,6 +403,32 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         // Usage Billing
         Route::get('/usage/compute',                 [FinanceController::class, 'usageCompute']);
         Route::post('/usage/record',                 [FinanceController::class, 'usageRecord'])->middleware('permission:create invoices');
+    });
+
+    // Collections / Dunning cockpit
+    // Back end already had DunningService + scheduled billing:run-dunning;
+    // these routes wire up the REST API. Reads need `view collections`
+    // (admin + staff); mutations need `manage dunning` (admin only).
+    Route::prefix('collections')->middleware('permission:view collections')->group(function () {
+        // Aging dashboard
+        Route::get('/aging', [CollectionsController::class, 'aging']);
+
+        // Dunning step ladder (escalation config)
+        Route::get('/dunning-steps',                               [CollectionsController::class, 'dunningSteps']);
+        Route::post('/dunning-steps',                              [CollectionsController::class, 'storeDunningStep'])->middleware('permission:manage dunning');
+        Route::post('/dunning-steps/reorder',                      [CollectionsController::class, 'reorderDunningSteps'])->middleware('permission:manage dunning');
+        Route::get('/dunning-steps/{step}',                        [CollectionsController::class, 'showDunningStep'])->name('api.collections.dunning-steps.show');
+        Route::put('/dunning-steps/{step}',                        [CollectionsController::class, 'updateDunningStep'])->middleware('permission:manage dunning');
+        Route::patch('/dunning-steps/{step}',                      [CollectionsController::class, 'updateDunningStep'])->middleware('permission:manage dunning');
+        Route::delete('/dunning-steps/{step}',                     [CollectionsController::class, 'destroyDunningStep'])->middleware('permission:manage dunning');
+
+        // Dunning execution (manual "run now" — idempotent per invoice+step)
+        Route::post('/run',                                        [CollectionsController::class, 'runNow'])->middleware('permission:manage dunning');
+
+        // Dunning runs (history)
+        Route::get('/dunning-runs',                                [CollectionsController::class, 'dunningRuns']);
+        Route::get('/clients/{client}/dunning-runs',               [CollectionsController::class, 'clientRuns']);
+        Route::get('/invoices/{invoice}/dunning-runs',             [CollectionsController::class, 'invoiceRuns']);
     });
 
     // M-Pesa (protected)

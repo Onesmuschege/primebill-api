@@ -231,4 +231,151 @@ class DunningService
             'notes'  => "Suspension step '{$step->name}' executed for {$accounts->count()} account(s).",
         ];
     }
+    /**
+     * Run the dunning engine for the currently bound tenant (HTTP/API context).
+     *
+     * Safe to invoke repeatedly — {@see runForTenant} is idempotent per
+     * invoice+step (sent/skipped runs are never re-executed), so a manual
+     * "run now" from the operator console never double-sends reminders or
+     * double-suspends services.
+     */
+    public function runNow(int $limit = 200): array
+    {
+        $tenant = Tenant::current();
+
+        if (! $tenant) {
+            return $this->emptySummary();
+        }
+
+        return $this->runForTenant($tenant, $limit);
+    }
+
+    /**
+     * Invoice-aging dashboard for the currently bound tenant.
+     *
+     * Buckets outstanding (unpaid/overdue) invoices by days past due, totals
+     * the exposure, and rolls it up per client. Consumes the same tenant
+     * global scope the rest of the engine uses, so cross-tenant leakage is
+     * structurally impossible.
+     *
+     * @return array{buckets:array,clients:array,total_outstanding:float,total_invoices:int,currency:string,generated_at:string}
+     */
+    public function aging(): array
+    {
+        $tenant   = Tenant::current();
+        $currency = $tenant?->currency ?? 'KES';
+
+        if (! $tenant) {
+            return $this->emptyAging($currency);
+        }
+
+        $buckets = [
+            ['label' => '0-30 days',  'min' => 0,  'max' => 30],
+            ['label' => '31-60 days', 'min' => 31, 'max' => 60],
+            ['label' => '61-90 days', 'min' => 61, 'max' => 90],
+            ['label' => '90+ days',   'min' => 91, 'max' => null],
+        ];
+
+        $invoices = Invoice::query()
+            ->whereIn('status', ['unpaid', 'overdue'])
+            ->whereNotNull('due_date')
+            ->where('due_date', '<=', now())
+            ->with(['client:id,first_name,last_name,email,phone', 'payments', 'refunds'])
+            ->orderBy('due_date')
+            ->get();
+
+        $counts = array_fill(0, count($buckets), 0);
+        $totals = array_fill(0, count($buckets), 0.0);
+        $grandTotal = 0.0;
+
+        foreach ($invoices as $invoice) {
+            $days = max(0, (int) now()->startOfDay()->diffInDays($invoice->due_date->startOfDay()));
+
+            // Reuse the invoice's source-of-truth balance (total - paid + refunded)
+            // without N+1 queries by summing the eagerly loaded relations.
+            $paid      = (float) $invoice->payments->where('status', 'completed')->sum('amount');
+            $refunded  = (float) $invoice->refunds->where('status', 'completed')->sum('amount');
+            $balance   = round((float) $invoice->total - $paid + $refunded, 2);
+            $grandTotal += $balance;
+
+            foreach ($buckets as $i => $bucket) {
+                if ($days >= $bucket['min'] && ($bucket['max'] === null || $days <= $bucket['max'])) {
+                    $counts[$i] += 1;
+                    $totals[$i] += $balance;
+                    break;
+                }
+            }
+        }
+
+        $bucketResult = [];
+        foreach ($buckets as $i => $bucket) {
+            $bucketResult[] = [
+                'label'       => $bucket['label'],
+                'min_days'    => $bucket['min'],
+                'max_days'    => $bucket['max'],
+                'count'       => $counts[$i],
+                'outstanding' => round($totals[$i], 2),
+            ];
+        }
+
+        // Per-client rollup (largest exposure first).
+        $clients = [];
+        foreach ($invoices->groupBy('client_id') as $clientId => $rows) {
+            $total  = 0.0;
+            $oldest = null;
+            foreach ($rows as $invoice) {
+                $paid      = (float) $invoice->payments->where('status', 'completed')->sum('amount');
+                $refunded  = (float) $invoice->refunds->where('status', 'completed')->sum('amount');
+                $total    += (float) $invoice->total - $paid + $refunded;
+                if ($oldest === null || $invoice->due_date < $oldest) {
+                    $oldest = $invoice->due_date;
+                }
+            }
+            $client = $rows->first()->client;
+            $clients[] = [
+                'client_id'       => (int) $clientId,
+                'client_name'     => $client
+                    ? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? ''))
+                    : null,
+                'outstanding'     => round($total, 2),
+                'invoice_count'   => $rows->count(),
+                'oldest_due_date' => $oldest ? $oldest->toDateString() : null,
+            ];
+        }
+        usort($clients, fn ($a, $b) => $b['outstanding'] <=> $a['outstanding']);
+
+        return [
+            'currency'          => $currency,
+            'generated_at'      => now()->toIso8601String(),
+            'total_outstanding' => round($grandTotal, 2),
+            'total_invoices'    => $invoices->count(),
+            'buckets'           => $bucketResult,
+            'clients'           => $clients,
+        ];
+    }
+
+    protected function emptySummary(): array
+    {
+        return [
+            'newly_overdue' => 0,
+            'email'         => 0,
+            'sms'           => 0,
+            'suspend'       => 0,
+            'escalate'      => 0,
+            'skipped'       => 0,
+        ];
+    }
+
+    protected function emptyAging(string $currency): array
+    {
+        return [
+            'currency'          => $currency,
+            'generated_at'      => now()->toIso8601String(),
+            'total_outstanding' => 0.0,
+            'total_invoices'    => 0,
+            'buckets'           => [],
+            'clients'           => [],
+        ];
+    }
+
     }

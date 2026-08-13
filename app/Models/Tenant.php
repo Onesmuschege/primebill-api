@@ -107,29 +107,6 @@ class Tenant extends Model
     public const STATUS_ARCHIVED = 'archived';
 
     /**
-     * The currently-resolved tenant for this request, set by the
-     * ResolveTenant middleware early in the request lifecycle.
-     * Returns null outside a request context (e.g. artisan commands
-     * that haven't explicitly set one) — callers must handle that case.
-     */
-    public static function current(): ?self
-    {
-        return app()->bound('currentTenant') ? app('currentTenant') : null;
-    }
-
-    /**
-     * Set the current tenant for this request/command context.
-     */
-    public static function setCurrent(?self $tenant): void
-    {
-        if ($tenant) {
-            app()->instance('currentTenant', $tenant);
-        } else {
-            app()->forgetInstance('currentTenant');
-        }
-    }
-
-    /**
      * Get all users for this tenant
      */
     public function users(): HasMany
@@ -338,8 +315,41 @@ class Tenant extends Model
     /**
      * Get all settings for this tenant
      */
-    public function settings(): HasMany
+        public function settings(): HasMany
     {
         return $this->hasMany(Setting::class);
+    }
+
+    /**
+     * ── Current-tenant context (multi-tenant) ──────────────────────────────
+     *
+     * The active tenant is bound in the container under 'currentTenant'.
+     *
+     *  - HTTP requests: ResolveTenant middleware binds it from the resolver;
+     *    BelongsToTenant's global scope then reads Tenant::current() so every
+     *    tenant-scoped query is automatically filtered (and cross-tenant data
+     *    is structurally impossible to leak).
+     *  - Console/queue: a command iterates tenants and calls setCurrent()
+     *    explicitly per tenant (e.g. billing:run-dunning), because there is
+     *    no request to resolve from and current() is null otherwise.
+     *
+     * Mirrors the binding contract used by ResolveTenant::handle() so a
+     * single source of truth powers both the middleware and the engine.
+     */
+    public static function setCurrent(?Tenant $tenant = null): void
+    {
+        app()->instance('currentTenant', $tenant);
+    }
+
+    public static function current(): ?Tenant
+    {
+        // `bound()` guards the console/off-request path where nothing has
+        // been set yet — returns null rather than throwing BindingResolution.
+        return app()->bound('currentTenant') ? app('currentTenant') : null;
+    }
+
+    public static function clearCurrent(): void
+    {
+        app()->forgetInstance('currentTenant');
     }
 }

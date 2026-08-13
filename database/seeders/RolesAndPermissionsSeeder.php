@@ -352,11 +352,15 @@ class RolesAndPermissionsSeeder extends Seeder
                         'view reporting',
             'manage reporting',
 
-            // RMA (Returns / Replacements / Repairs) — Phase 4 (Field Operations)
+                        // RMA (Returns / Replacements / Repairs) — Phase 4 (Field Operations)
             'view rmas',
             'create rmas',
             'edit rmas',
             'delete rmas',
+
+            // Collections / Dunning
+            'view collections',
+            'manage dunning',
         ];
 
         /*
@@ -447,11 +451,15 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit vouchers',
             'delete vouchers',
 
-            // Billing
+                        // Billing
             'view invoices',
             'create invoices',
             'edit invoices',
             'delete invoices',
+
+                        // Collections / Dunning (Billing)
+            'view collections',
+            'manage dunning',
 
             'view payments',
             'create payments',
@@ -626,9 +634,12 @@ class RolesAndPermissionsSeeder extends Seeder
             // Vouchers
             'view vouchers',
 
-            // Billing
+                        // Billing
             'view invoices',
             'create invoices',
+
+            // Collections / Dunning — staff view-only
+            'view collections',
 
             'view payments',
             'create payments',
