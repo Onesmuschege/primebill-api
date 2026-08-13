@@ -47,7 +47,7 @@ class TicketController extends Controller
     // GET /api/tickets/{id}
     public function show(Ticket $ticket)
     {
-        $ticket->load('client', 'assignedTo', 'replies.user');
+        $ticket->load('client', 'assignedTo', 'replies.user', 'workOrder', 'knowledgeRefs.article', 'knowledgeRefs.creator');
 
         return response()->json([
             'success' => true,
@@ -136,6 +136,80 @@ class TicketController extends Controller
             'message' => 'Ticket escalated successfully',
             'data'    => $ticket,
         ]);
+    }
+
+    // POST /api/tickets/{id}/work-order — link a ticket to its field-ops dispatch
+    public function linkWorkOrder(Request $request, Ticket $ticket)
+    {
+        $request->validate([
+            'work_order_id' => ['required', 'exists:work_orders,id'],
+        ]);
+
+        $ticket->update(['work_order_id' => $request->work_order_id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Work order linked to ticket',
+            'data'    => $ticket->load('workOrder'),
+        ]);
+    }
+
+    // POST /api/tickets/{id}/unlink-work-order
+    public function unlinkWorkOrder(Ticket $ticket)
+    {
+        $ticket->update(['work_order_id' => null]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Work order unlinked from ticket',
+            'data'    => $ticket->fresh(),
+        ]);
+    }
+
+    // GET /api/tickets/{id}/knowledge — KB articles referenced on this ticket
+    public function knowledgeRefs(Ticket $ticket)
+    {
+        $refs = $ticket->knowledgeRefs()->with(['article:id,title,slug', 'creator:id,name'])->get();
+
+        return response()->json(['success' => true, 'data' => $refs]);
+    }
+
+    // POST /api/tickets/{id}/knowledge — attach a KB reference
+    public function addKnowledgeRef(Request $request, Ticket $ticket)
+    {
+        $data = $request->validate([
+            'knowledge_base_article_id' => ['required', 'exists:knowledge_base_articles,id'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        $ref = \App\Models\TicketKnowledgeRef::updateOrCreate(
+            [
+                'ticket_id'                    => $ticket->id,
+                'knowledge_base_article_id'    => $data['knowledge_base_article_id'],
+            ],
+            [
+                'note'       => $data['note'] ?? null,
+                'created_by' => $request->user()->id,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Knowledge reference attached',
+            'data'    => $ref->load(['article:id,title,slug', 'creator:id,name']),
+        ], 201);
+    }
+
+    // DELETE /api/tickets/{id}/knowledge/{ref}
+    public function removeKnowledgeRef(Ticket $ticket, \App\Models\TicketKnowledgeRef $ref)
+    {
+        if ($ref->ticket_id !== $ticket->id) {
+            return response()->json(['success' => false, 'message' => 'Reference does not belong to this ticket'], 422);
+        }
+
+        $ref->delete();
+
+        return response()->json(['success' => true, 'message' => 'Knowledge reference removed']);
     }
 
     // GET /api/tickets/stats

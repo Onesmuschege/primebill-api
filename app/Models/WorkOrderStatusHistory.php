@@ -10,6 +10,13 @@ class WorkOrderStatusHistory extends Model
 {
     use BelongsToTenant;
 
+    /**
+     * The migration creates the table in the singular form
+     * (create_work_order_status_history_table) — name it explicitly to
+     * match, since Eloquent would otherwise assume the plural.
+     */
+    protected $table = 'work_order_status_history';
+
     protected $fillable = [
         'tenant_id',
         'work_order_id',

@@ -11,11 +11,12 @@ class Ticket extends Model
     use HasFactory, BelongsToTenant;
 
     protected $fillable = [
-        'client_id', 'assigned_to', 'subject',
+        'tenant_id', 'client_id', 'assigned_to', 'subject',
         'description', 'priority', 'status', 'closed_at',
         'sla_policy_id', 'first_responded_at',
         'sla_response_due_at', 'sla_resolution_due_at',
         'sla_breached', 'last_sla_evaluated_at',
+        'work_order_id',
     ];
 
     protected $casts = [
@@ -50,5 +51,29 @@ class Ticket extends Model
     public function escalations()
     {
         return $this->hasMany(TicketEscalation::class);
+    }
+
+    /**
+     * Service-desk ↔ field-ops: the work order this ticket is linked to
+     * (a dispatch behind a complaint, or a job promoted from the desk).
+     */
+    public function workOrder()
+    {
+        return $this->belongsTo(WorkOrder::class);
+    }
+
+    /**
+     * Knowledge-base articles referenced while resolving this ticket.
+     */
+    public function knowledgeRefs()
+    {
+        return $this->hasMany(TicketKnowledgeRef::class);
+    }
+
+    public function knowledgeArticles()
+    {
+        return $this->belongsToMany(KnowledgeBaseArticle::class, 'ticket_knowledge_refs')
+            ->withPivot(['note', 'created_by', 'created_at'])
+            ->withTimestamps();
     }
 }

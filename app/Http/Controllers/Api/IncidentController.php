@@ -21,7 +21,7 @@ class IncidentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = NetworkIncident::query()
-            ->with(['affectedDevice:id,name,ip_address', 'affectedOlt:id,name', 'affectedPonPort:id,name', 'creator', 'assignedTechnician', 'acknowledgedByUser', 'resolvedByUser']);
+            ->with(['affectedDevice:id,name,ip_address', 'affectedOlt:id,name', 'affectedPonPort:id,name', 'creator', 'assignedTechnician', 'acknowledgedByUser', 'resolvedByUser', 'escalatedByUser']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -82,6 +82,7 @@ class IncidentController extends Controller
             'assignedTechnician:id,name',
             'acknowledgedByUser:id,name',
             'resolvedByUser:id,name',
+            'escalatedByUser:id,name',
         ]);
 
         return $this->success($incident);
@@ -192,6 +193,22 @@ class IncidentController extends Controller
         $incident->refresh();
 
         return $this->success($incident, 'Incident closed');
+    }
+
+    public function escalate(Request $request, NetworkIncident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'escalation_reason' => ['required', 'string'],
+            'severity' => ['nullable', Rule::in(['low', 'medium', 'high', 'critical'])],
+        ]);
+
+        if (! $incident->escalate($request->user()->id, $data['escalation_reason'], $data['severity'] ?? null)) {
+            return $this->error('Resolved/closed incidents cannot be escalated', null, 422);
+        }
+
+        $incident->load(['escalatedByUser:id,name']);
+
+        return $this->success($incident, 'Incident escalated');
     }
 
     public function stats(Request $request): JsonResponse

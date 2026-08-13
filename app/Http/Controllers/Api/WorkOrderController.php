@@ -116,6 +116,46 @@ class WorkOrderController extends Controller
         ]);
     }
 
+    /**
+     * POST /api/work-orders/{workOrder}/verify — closed-loop QA sign-off.
+     * Only a completed work order can be verified; records who/when/notes.
+     */
+    public function verify(Request $request, WorkOrder $workOrder): JsonResponse
+    {
+        $request->validate([
+            'verification_notes' => ['nullable', 'string'],
+        ]);
+
+        if (! $workOrder->verify((int) Auth::id(), $request->input('verification_notes'))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only completed work orders can be verified',
+            ], 422);
+        }
+
+        $workOrder->load(['verifiedBy:id,name']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Work order verified',
+            'data' => $workOrder,
+        ]);
+    }
+
+    /**
+     * GET /api/work-orders/{workOrder}/status-history — operational timeline
+     * of every lifecycle transition (scheduled → dispatched → in_progress →
+     * completed → verified / cancelled).
+     */
+    public function statusHistory(WorkOrder $workOrder): JsonResponse
+    {
+        $history = $workOrder->statusHistory()
+            ->with('changedBy:id,name')
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $history]);
+    }
+
     public function stats(): JsonResponse
     {
         $stats = $this->workOrders->getStats();

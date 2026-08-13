@@ -27,7 +27,8 @@
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
+                <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="AUTOMATION_ENABLED" value="false"/>
         <env name="NETWORK_ROUTER_DRIVER" value="mock"/>
         <env name="NETWORK_RADIUS_DRIVER" value="mock"/>
         <env name="RADIUS_WEBHOOK_SECRET" value="test-secret"/>

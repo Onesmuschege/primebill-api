@@ -53,6 +53,7 @@ use App\Http\Controllers\Api\ClientNoteController;
 use App\Http\Controllers\Api\ClientTagController;
 use App\Http\Controllers\Api\ClientCustomFieldController;
 use App\Http\Controllers\Api\WorkOrderController;
+use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\OltController;
 use App\Http\Controllers\Api\FiberController;
 use App\Http\Controllers\Api\FiberCapacityController;
@@ -183,6 +184,17 @@ Route::prefix('portal/{tenant_slug}')->middleware('tenant')->group(function () {
 
 // ─── Protected Admin/Staff routes ─────────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 'ip.restriction'])->group(function () {
+
+    // Automation console API — Release 5
+    Route::prefix('automation')->group(function () {
+        Route::get('/events',                  [AutomationController::class, 'events']);
+        Route::get('/jobs',                    [AutomationController::class, 'jobs']);
+        Route::get('/failures',                [AutomationController::class, 'failures']);
+        Route::post('/jobs/{id}/retry',        [AutomationController::class, 'retry']);
+        Route::get('/rules',                   [AutomationController::class, 'rules']);
+        Route::post('/rules',                  [AutomationController::class, 'storeRule']);
+        Route::put('/rules/{rule}',            [AutomationController::class, 'updateRule']);
+    });
 
     // Auth
     Route::prefix('auth')->group(function () {
@@ -417,6 +429,11 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::post('/{ticket}/assign',   [TicketController::class, 'assign'])->middleware('permission:assign tickets');
         Route::post('/{ticket}/close',    [TicketController::class, 'close'])->middleware('permission:close tickets');
         Route::post('/{ticket}/escalate', [TicketController::class, 'escalate']);
+        Route::post('/{ticket}/work-order',      [TicketController::class, 'linkWorkOrder'])->middleware('permission:edit tickets');
+        Route::post('/{ticket}/unlink-work-order', [TicketController::class, 'unlinkWorkOrder'])->middleware('permission:edit tickets');
+        Route::get('/{ticket}/knowledge',         [TicketController::class, 'knowledgeRefs']);
+        Route::post('/{ticket}/knowledge',        [TicketController::class, 'addKnowledgeRef'])->middleware('permission:edit tickets');
+        Route::delete('/{ticket}/knowledge/{ref}', [TicketController::class, 'removeKnowledgeRef'])->middleware('permission:edit tickets');
     });
 
     // Dashboard
@@ -573,6 +590,8 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::delete('/{workOrder}',     [WorkOrderController::class, 'destroy'])->middleware('permission:delete work-orders');
         Route::post('/{workOrder}/assign',[WorkOrderController::class, 'assignTechnician'])->middleware('permission:edit work-orders');
         Route::post('/{workOrder}/status',[WorkOrderController::class, 'updateStatus'])->middleware('permission:edit work-orders');
+        Route::post('/{workOrder}/verify',[WorkOrderController::class, 'verify'])->middleware('permission:edit work-orders');
+        Route::get('/{workOrder}/status-history', [WorkOrderController::class, 'statusHistory']);
         Route::get('/{workOrder}/parts',       [WorkOrderController::class, 'parts']);
         Route::post('/{workOrder}/parts',      [WorkOrderController::class, 'addPart'])->middleware('permission:edit work-orders');
         Route::get('/{workOrder}/attachments', [WorkOrderController::class, 'attachments']);
@@ -714,6 +733,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::post('/{incident}/status', [IncidentController::class, 'updateStatus'])->middleware('permission:edit incidents');
         Route::post('/{incident}/resolve', [IncidentController::class, 'resolve'])->middleware('permission:edit incidents');
         Route::post('/{incident}/close', [IncidentController::class, 'close'])->middleware('permission:edit incidents');
+        Route::post('/{incident}/escalate', [IncidentController::class, 'escalate'])->middleware('permission:edit incidents');
     });
 
     // Fiber / OLT — OLTs, PON ports, ONTs

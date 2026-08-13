@@ -35,6 +35,10 @@ class NetworkIncident extends Model
         'affected_services',
         'affected_customers_count',
         'duration_minutes',
+        'escalation_level',
+        'escalated_at',
+        'escalated_by',
+        'escalation_reason',
     ];
 
     protected $casts = [
@@ -42,6 +46,8 @@ class NetworkIncident extends Model
         'acknowledged_at' => 'datetime',
         'resolved_at' => 'datetime',
         'closed_at' => 'datetime',
+        'escalated_at' => 'datetime',
+        'escalation_level' => 'integer',
         'affected_services' => 'array',
         'affected_customers_count' => 'integer',
         'duration_minutes' => 'integer',
@@ -82,6 +88,11 @@ class NetworkIncident extends Model
     public function resolvedByUser()
     {
         return $this->belongsTo(User::class, 'resolved_by');
+    }
+
+    public function escalatedByUser()
+    {
+        return $this->belongsTo(User::class, 'escalated_by');
     }
 
     // ─── Scopes ──────────────────────────────────────────────────────────
@@ -167,5 +178,44 @@ class NetworkIncident extends Model
         ]);
 
         return true;
+    }
+
+    /**
+     * Escalate an open incident. Escalation is orthogonal to the lifecycle
+     * state machine: it raises the escalation level (0 → 1 → 2 → 3, capped),
+     * optionally bumps severity, and records who/when/why. Closed incidents
+     * cannot be escalated.
+     */
+    public function escalate(int $userId, ?string $reason = null, ?string $severity = null): bool
+    {
+        if ($this->isClosed() || $this->isResolved()) {
+            return false;
+        }
+
+        $this->escalation_level = min($this->escalation_level + 1, 3);
+        $this->escalated_at = now();
+        $this->escalated_by = $userId;
+        if ($reason !== null) {
+            $this->escalation_reason = $reason;
+        }
+        if ($severity !== null && in_array($severity, ['low', 'medium', 'high', 'critical'], true)) {
+            $this->severity = $severity;
+        }
+
+        $this->save();
+
+        $this->logAudit('escalated', [
+            'escalation_level' => $this->escalation_level,
+        ], [
+            'reason'   => $reason,
+            'severity' => $this->severity,
+        ]);
+
+        return true;
+    }
+
+    public function escalationLevel(): int
+    {
+        return $this->escalation_level;
     }
 }

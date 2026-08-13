@@ -33,12 +33,16 @@ class WorkOrder extends Model
         'completion_notes',
         'completion_latitude',
         'completion_longitude',
+        'verified_at',
+        'verified_by',
+        'verification_notes',
     ];
 
     protected $casts = [
         'scheduled_at' => 'datetime',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'verified_at' => 'datetime',
         'photos' => 'array',
         'customer_signature' => 'array',
         'completion_latitude' => 'decimal:8',
@@ -58,5 +62,45 @@ class WorkOrder extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function verifiedBy()
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function statusHistory()
+    {
+        return $this->hasMany(WorkOrderStatusHistory::class)->orderByDesc('id');
+    }
+
+    /**
+     * Mark a completed work order as verified (closed-loop QA sign-off).
+     * Must already be completed; records verifying user + timestamp.
+     */
+    public function verify(int $userId, ?string $notes = null): bool
+    {
+        if ($this->status !== 'completed') {
+            return false;
+        }
+
+        $this->verified_by = $userId;
+        $this->verified_at = now();
+        if ($notes !== null) {
+            $this->verification_notes = $notes;
+        }
+
+        $this->save();
+
+        $this->logAudit('verified', [], [
+            'notes' => $notes,
+        ]);
+
+        return true;
+    }
+
+    public function isVerified(): bool
+    {
+        return $this->verified_at !== null && $this->verified_by !== null;
     }
 }
