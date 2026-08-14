@@ -19,13 +19,13 @@ class RouterConfigurationSeeder extends Seeder
 
             foreach ($routers as $router) {
                 RouterConfiguration::updateOrCreate(
-                    ['router_id' => $router->id, 'name' => 'Default Configuration'],
+                    ['router_id' => $router->id, 'label' => 'Default Configuration'],
                     [
-                        'tenant_id' => $tenant->id,
-                        'router_id' => $router->id,
-                        'name' => 'Default Configuration',
-                        'configuration' => json_encode(['identity' => $router->name, 'snmp_community' => 'public']),
-                        'is_active' => true,
+                        'tenant_id'     => $tenant->id,
+                        'router_id'     => $router->id,
+                        'version'       => 'v1',
+                        'label'         => 'Default Configuration',
+                        'configuration' => ['identity' => $router->name, 'snmp_community' => 'public'],
                     ]
                 );
             }

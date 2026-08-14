@@ -7,7 +7,6 @@ use App\Models\RadiusSession;
 use App\Models\Tenant;
 use Database\Seeders\Traits\SeedsForTenant;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Carbon;
 
 class RadiusCoaRequestSeeder extends Seeder
 {
@@ -21,12 +20,11 @@ class RadiusCoaRequestSeeder extends Seeder
 
             foreach ($sessions as $session) {
                 RadiusCoaRequest::create([
-                    'tenant_id' => $tenant->id,
+                    'tenant_id'         => $tenant->id,
                     'radius_session_id' => $session->id,
-                    'request_type' => 'CoA-Request',
-                    'status' => 'dispatched',
-                    'attributes' => json_encode(['Framed-Protocol' => 'PPP']),
-                    'sent_at' => Carbon::now()->subHours(rand(1, 24)),
+                    'action'            => 'CoA-Request',
+                    'status'            => 'dispatched',
+                    'attributes'        => ['Framed-Protocol' => 'PPP'],
                 ]);
                 $count++;
             }

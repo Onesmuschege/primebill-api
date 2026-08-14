@@ -15,8 +15,8 @@ class ServiceTemplateSeeder extends Seeder
     {
         $this->forEachTenant(function (Tenant $tenant) {
             $templates = [
-                ['name' => 'Home Internet', 'description' => 'Standard residential internet', 'default_price' => 3500.00, 'features' => json_encode(['WiFi' => true, 'Static IP' => false])],
-                ['name' => 'Business Fiber', 'description' => 'Business fiber connection', 'default_price' => 9000.00, 'features' => json_encode(['WiFi' => true, 'Static IP' => true, 'SLA' => true])],
+                ['name' => 'Home Internet', 'description' => 'Standard residential internet', 'service_type' => 'residential', 'plan_defaults' => ['price' => 3500.00, 'features' => ['WiFi' => true, 'Static IP' => false]]],
+                ['name' => 'Business Fiber', 'description' => 'Business fiber connection', 'service_type' => 'business', 'plan_defaults' => ['price' => 9000.00, 'features' => ['WiFi' => true, 'Static IP' => true, 'SLA' => true]]],
             ];
 
             foreach ($templates as $template) {

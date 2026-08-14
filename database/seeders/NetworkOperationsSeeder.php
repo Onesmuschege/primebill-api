@@ -37,6 +37,7 @@ class NetworkOperationsSeeder extends Seeder
                 NetworkAlert::create([
                     'tenant_id' => $tenant->id,
                     'device_id' => $device->id,
+                    'alert_type' => 'high_util',
                     'severity' => 'warning',
                     'message' => 'High bandwidth utilization detected',
                     'created_at' => Carbon::now()->subHours(3),

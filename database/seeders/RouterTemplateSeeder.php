@@ -15,9 +15,9 @@ class RouterTemplateSeeder extends Seeder
     {
         $this->forEachTenant(function (Tenant $tenant) {
             $templates = [
-                ['name' => 'MikroTik hAP ac2 Config', 'vendor' => 'MikroTik', 'model' => 'hAP ac2', 'template' => json_encode(['system' => ['identity' => 'MikroTik']])],
-                ['name' => 'MikroTik RB750Gr3 Config', 'vendor' => 'MikroTik', 'model' => 'RB750Gr3', 'template' => json_encode(['system' => ['identity' => 'MikroTik']])],
-                ['name' => 'Cisco 2901 Config', 'vendor' => 'Cisco', 'model' => '2901', 'template' => json_encode(['hostname' => 'Cisco-Router'])],
+                ['name' => 'MikroTik hAP ac2 Config', 'router_type' => 'mikrotik', 'description' => 'Default home router profile', 'base_configuration' => ['system' => ['identity' => 'MikroTik hAP ac2']]],
+                ['name' => 'MikroTik RB750Gr3 Config', 'router_type' => 'mikrotik', 'description' => 'SOHO router profile', 'base_configuration' => ['system' => ['identity' => 'RB750Gr3']]],
+                ['name' => 'Cisco 2901 Config', 'router_type' => 'cisco', 'description' => 'Business edge router profile', 'base_configuration' => ['hostname' => 'Cisco-Router']],
             ];
 
             foreach ($templates as $template) {

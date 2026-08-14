@@ -15,9 +15,9 @@ class ServiceProfileSeeder extends Seeder
     {
         $this->forEachTenant(function (Tenant $tenant) {
             $profiles = [
-                ['name' => 'Standard QoS', 'description' => 'Standard quality of service profile', 'upload_speed' => 5000, 'download_speed' => 5000, 'priority' => 'normal'],
-                ['name' => 'Business QoS', 'description' => 'Business priority QoS', 'upload_speed' => 10000, 'download_speed' => 10000, 'priority' => 'high'],
-                ['name' => 'Gaming QoS', 'description' => 'Low latency gaming profile', 'upload_speed' => 2000, 'download_speed' => 8000, 'priority' => 'high'],
+                ['name' => 'Standard QoS', 'description' => 'Standard quality of service profile', 'download_speed' => 5000, 'upload_speed' => 5000, 'service_type' => 'pppoe'],
+                ['name' => 'Business QoS', 'description' => 'Business priority QoS', 'download_speed' => 10000, 'upload_speed' => 10000, 'service_type' => 'pppoe'],
+                ['name' => 'Gaming QoS', 'description' => 'Low latency gaming profile', 'download_speed' => 8000, 'upload_speed' => 2000, 'service_type' => 'pppoe'],
             ];
 
             foreach ($profiles as $profile) {

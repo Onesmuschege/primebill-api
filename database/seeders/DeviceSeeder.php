@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Client;
 use App\Models\Device;
 use App\Models\Tenant;
 use Database\Seeders\Traits\SeedsForTenant;
@@ -14,17 +15,31 @@ class DeviceSeeder extends Seeder
     public function run(): void
     {
         $this->forEachTenant(function (Tenant $tenant) {
+            $clients = Client::where('tenant_id', $tenant->id)
+                ->where('status', 'active')
+                ->get();
+
+            if ($clients->isEmpty()) {
+                $this->command->warn("DeviceSeeder [{$tenant->slug}]: No active clients found. Skipping.");
+                return;
+            }
+
             $devices = [
-                ['name' => 'OLT-KL-01', 'type' => 'OLT', 'vendor' => 'Huawei', 'model' => 'MA5680T', 'ip_address' => '10.10.10.1', 'status' => 'active'],
-                ['name' => 'OLT-KL-02', 'type' => 'OLT', 'vendor' => 'ZTE', 'model' => 'C320', 'ip_address' => '10.10.10.2', 'status' => 'active'],
-                ['name' => 'Switch-Core-01', 'type' => 'Switch', 'vendor' => 'Cisco', 'model' => 'Catalyst 9300', 'ip_address' => '10.10.10.3', 'status' => 'active'],
-                ['name' => 'Switch-Access-01', 'type' => 'Switch', 'vendor' => 'TP-Link', 'model' => 'TL-SG3424', 'ip_address' => '10.10.10.4', 'status' => 'active'],
+                ['device_name' => 'OLT-KL-01',        'device_type' => 'OLT',    'vendor' => 'Huawei', 'ip_address' => '10.10.10.1', 'status' => 'active'],
+                ['device_name' => 'OLT-KL-02',        'device_type' => 'OLT',    'vendor' => 'ZTE',    'ip_address' => '10.10.10.2', 'status' => 'active'],
+                ['device_name' => 'Switch-Core-01',   'device_type' => 'Switch', 'vendor' => 'Cisco',  'ip_address' => '10.10.10.3', 'status' => 'active'],
+                ['device_name' => 'Switch-Access-01', 'device_type' => 'Switch', 'vendor' => 'TP-Link','ip_address' => '10.10.10.4', 'status' => 'active'],
             ];
 
-            foreach ($devices as $device) {
+            foreach ($devices as $i => $device) {
+                $client = $clients[$i % $clients->count()];
                 Device::updateOrCreate(
-                    ['tenant_id' => $tenant->id, 'name' => $device['name']],
-                    array_merge($device, ['tenant_id' => $tenant->id])
+                    ['tenant_id' => $tenant->id, 'device_name' => $device['device_name']],
+                    array_merge($device, [
+                        'client_id'     => $client->id,
+                        'first_seen_at' => now()->subDays(rand(1, 60)),
+                        'last_seen_at'  => now(),
+                    ])
                 );
             }
 

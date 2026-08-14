@@ -45,12 +45,23 @@ class DatabaseSeeder extends Seeder
 
             // --- Phase 2: Service Catalog & Network Core ---
             ServiceCatalogSeeder::class,
+            ServiceAddonSeeder::class,
+            ServiceProfileSeeder::class,
+            ServiceTemplateSeeder::class,
             RouterManagementSeeder::class,
+            RouterTemplateSeeder::class,
+            RouterConfigurationSeeder::class,
+            RouterInterfaceSeeder::class,
+            DeviceSeeder::class,
             RadiusManagementSeeder::class,
+            RadiusAttributeSeeder::class,
+            ProvisioningProfileSeeder::class,
             NetworkOperationsSeeder::class,
 
             // --- Phase 2: RADIUS sessions (depends on accounts) ---
             RadiusSessionSeeder::class,
+            RadiusCoaRequestSeeder::class,
+            RadiusDisconnectRequestSeeder::class,
 
             // --- Phase 3: IPAM (depends on routers, vlans) ---
             IpamSeeder::class,
@@ -60,8 +71,8 @@ class DatabaseSeeder extends Seeder
             DiscountSeeder::class,
             WalletSeeder::class,
             InvoiceSeeder::class,
-            PaymentAllocationSeeder::class,
             PaymentSeeder::class,
+            PaymentAllocationSeeder::class,
             LedgerSeeder::class,
             RefundSeeder::class,
             CreditDebitNoteSeeder::class,
@@ -84,7 +95,7 @@ class DatabaseSeeder extends Seeder
             KnowledgeBaseSeeder::class,
             MaintenanceNoticeSeeder::class,
 
-            // --- Phase 1: Support & Comms (tickets depend on clients + users) ---
+            // --- Phase 7: Support & Comms (tickets depend on clients + users) ---
             TicketSeeder::class,
             SmsLogSeeder::class,
             CommunicationTemplateSeeder::class,
@@ -94,10 +105,10 @@ class DatabaseSeeder extends Seeder
             CampaignSeeder::class,
             WebhookSeeder::class,
 
-            // --- Phase 1: Network data (depends on routers) ---
+            // --- Phase 7: Network data (depends on routers) ---
             NetworkTrafficSeeder::class,
 
-            // --- Phase 1: Finance & inventory data ---
+            // --- Phase 7: Finance & inventory data ---
             ExpenditureSeeder::class,
 
             // --- Phase 8: Customer Experience ---

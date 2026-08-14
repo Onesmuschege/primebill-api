@@ -8,7 +8,13 @@ use App\Models\Concerns\BelongsToTenant;
 
 class OntSignalHistory extends Model
 {
-    use BelongsToTenant;
+         use BelongsToTenant;
+
+    /**
+     * Migration creates this table with a singular name that does not
+     * match Eloquent's default plural convention.
+     */
+    protected $table = 'ont_signal_history';
 
     protected $fillable = [
         'tenant_id',

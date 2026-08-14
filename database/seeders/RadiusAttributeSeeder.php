@@ -23,14 +23,14 @@ class RadiusAttributeSeeder extends Seeder
             }
 
             $attributes = [
-                ['profile_id' => $profile->id, 'vendor' => 'MikroTik', 'attribute' => 'Mikrotik-Rate-Limit', 'value' => '5M/5M', 'op' => '='],
-                ['profile_id' => $profile->id, 'vendor' => 'MikroTik', 'attribute' => 'Mikrotik-Recv-Limit', 'value' => '5242880', 'op' => '='],
-                ['profile_id' => $profile->id, 'vendor' => 'MikroTik', 'attribute' => 'Mikrotik-Xmit-Limit', 'value' => '5242880', 'op' => '='],
+                ['radius_profile_id' => $profile->id, 'vendor' => 'MikroTik', 'name' => 'Mikrotik-Rate-Limit', 'type' => 'reply', 'value' => '5M/5M', 'opcode' => '=', 'priority' => 10],
+                ['radius_profile_id' => $profile->id, 'vendor' => 'MikroTik', 'name' => 'Mikrotik-Recv-Limit', 'type' => 'reply', 'value' => '5242880', 'opcode' => '=', 'priority' => 20],
+                ['radius_profile_id' => $profile->id, 'vendor' => 'MikroTik', 'name' => 'Mikrotik-Xmit-Limit', 'type' => 'reply', 'value' => '5242880', 'opcode' => '=', 'priority' => 30],
             ];
 
             foreach ($attributes as $attr) {
                 RadiusAttribute::updateOrCreate(
-                    ['tenant_id' => $tenant->id, 'profile_id' => $attr['profile_id'], 'attribute' => $attr['attribute']],
+                    ['tenant_id' => $tenant->id, 'radius_profile_id' => $attr['radius_profile_id'], 'name' => $attr['name']],
                     array_merge($attr, ['tenant_id' => $tenant->id])
                 );
             }

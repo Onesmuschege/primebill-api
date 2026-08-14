@@ -10,7 +10,14 @@ class CustomerSatisfaction extends Model
 {
     use BelongsToTenant;
 
-    protected $fillable = [
+    /**
+     * The migration creates this table with a singular name
+     * (customer_satisfaction) that does not match Eloquent's default
+     * plural convention. Explicitly declare it so queries resolve.
+     */
+    protected $table = 'customer_satisfaction';
+
+            protected $fillable = [
         'tenant_id',
         'client_id',
         'type',
