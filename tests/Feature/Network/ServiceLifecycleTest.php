@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Network;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Models\Client;
 use App\Models\ClientAccount;
 use App\Models\Plan;
@@ -35,7 +37,7 @@ class ServiceLifecycleTest extends TestCase
         $this->plan = Plan::factory()->create(['tenant_id' => $this->tenant->id]);
     }
 
-    /** @test */
+    #[Test]
     public function service_transitions_through_valid_states(): void
     {
         $account = ClientAccount::create([
@@ -70,7 +72,7 @@ class ServiceLifecycleTest extends TestCase
         $this->assertEquals(ClientAccount::STATE_TERMINATED, $account->service_state);
     }
 
-    /** @test */
+    #[Test]
     public function service_rejects_invalid_state_transitions(): void
     {
         $account = ClientAccount::create([
@@ -96,7 +98,7 @@ class ServiceLifecycleTest extends TestCase
         $this->assertFalse($account->transitionTo(ClientAccount::STATE_PENDING));
     }
 
-    /** @test */
+    #[Test]
     public function service_transition_records_network_event(): void
     {
         $account = ClientAccount::create([
@@ -122,7 +124,7 @@ class ServiceLifecycleTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function api_can_suspend_and_resume_service(): void
     {
         $account = ClientAccount::factory()->create([
@@ -159,7 +161,7 @@ class ServiceLifecycleTest extends TestCase
         $this->assertEquals(ClientAccount::STATE_ACTIVE, $account->service_state);
     }
 
-    /** @test */
+    #[Test]
     public function service_can_enter_grace_period_from_past_due(): void
     {
         $account = ClientAccount::create([
@@ -177,7 +179,7 @@ class ServiceLifecycleTest extends TestCase
         $this->assertEquals(ClientAccount::STATE_GRACE_PERIOD, $account->service_state);
     }
 
-    /** @test */
+    #[Test]
     public function grace_period_can_return_to_active(): void
     {
         $account = ClientAccount::create([

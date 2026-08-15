@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -51,7 +53,7 @@ class MfaRecoveryCodeTest extends TestCase
         return $this->mfaService->enableMfa($this->user);
     }
 
-    /** @test */
+    #[Test]
     public function recovery_codes_are_stored_as_hashes_not_plaintext()
     {
         $codes = $this->enableMfaWithRecoveryCodes();
@@ -78,7 +80,7 @@ class MfaRecoveryCodeTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function recovery_code_is_single_use()
     {
         $codes = $this->enableMfaWithRecoveryCodes();
@@ -93,7 +95,7 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertTrue($this->mfaService->recoveryCodeCount($this->user) === 7);
     }
 
-    /** @test */
+    #[Test]
     public function invalid_recovery_code_is_rejected()
     {
         $this->enableMfaWithRecoveryCodes();
@@ -102,7 +104,7 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertSame(8, $this->mfaService->recoveryCodeCount($this->user));
     }
 
-    /** @test */
+    #[Test]
     public function recovery_code_lockout_after_too_many_attempts()
     {
         $codes = $this->enableMfaWithRecoveryCodes();
@@ -118,7 +120,7 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertSame(8, $this->mfaService->recoveryCodeCount($this->user));
     }
 
-    /** @test */
+    #[Test]
     public function regeneration_invalidates_old_codes()
     {
         $oldCodes = $this->enableMfaWithRecoveryCodes();
@@ -135,7 +137,7 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertSame(7, $this->mfaService->recoveryCodeCount($this->user));
     }
 
-    /** @test */
+    #[Test]
     public function recovery_codes_are_never_returned_in_status_response()
     {
         $this->enableMfaWithRecoveryCodes();
@@ -150,7 +152,7 @@ class MfaRecoveryCodeTest extends TestCase
             ->assertJsonMissing(['backup_codes']);
     }
 
-    /** @test */
+    #[Test]
     public function recovery_codes_are_never_exposed_in_user_profile()
     {
         $this->enableMfaWithRecoveryCodes();
@@ -165,7 +167,7 @@ class MfaRecoveryCodeTest extends TestCase
         $response->assertJsonMissing(['code_hash']);
     }
 
-    /** @test */
+    #[Test]
     public function customer_tenant_cannot_use_other_tenant_recovery_codes()
     {
         $codes = $this->enableMfaWithRecoveryCodes();
@@ -185,14 +187,14 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertTrue($this->mfaService->verifyRecoveryCode($this->user, $codes[0]));
     }
 
-    /** @test */
+    #[Test]
     public function unauthorized_user_cannot_access_recovery_code_endpoints()
     {
         $response = $this->postJson('/api/mfa/backup-codes', ['code' => '123456']);
         $response->assertStatus(401);
     }
 
-    /** @test */
+    #[Test]
     public function disabling_mfa_invalidates_all_recovery_codes()
     {
         $this->enableMfaWithRecoveryCodes();
@@ -203,7 +205,7 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertFalse($this->mfaService->isEnabled($this->user));
     }
 
-    /** @test */
+    #[Test]
     public function expired_recovery_codes_are_rejected()
     {
         $codes = $this->enableMfaWithRecoveryCodes();
@@ -216,7 +218,7 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertFalse($this->mfaService->verifyRecoveryCode($this->user, $codes[0]));
     }
 
-    /** @test */
+    #[Test]
     public function challenge_with_recovery_code_returns_session_token()
     {
         $codes = $this->enableMfaWithRecoveryCodes();
@@ -243,7 +245,7 @@ class MfaRecoveryCodeTest extends TestCase
         $this->assertFalse($this->mfaService->verifyRecoveryCode($this->user, $codes[0]));
     }
 
-    /** @test */
+    #[Test]
     public function challenge_with_reused_recovery_code_is_rejected()
     {
         $codes = $this->enableMfaWithRecoveryCodes();
@@ -272,7 +274,7 @@ class MfaRecoveryCodeTest extends TestCase
             ->assertJson(['message' => 'Invalid verification code']);
     }
 
-    /** @test */
+    #[Test]
     public function audit_log_does_not_contain_recovery_codes()
     {
         $codes = $this->enableMfaWithRecoveryCodes();

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\ServiceDesk;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\Client;
 use App\Models\KnowledgeBaseArticle;
@@ -90,7 +92,7 @@ class TicketRelationshipsTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function ticket_can_be_linked_to_a_work_order()
     {
         Sanctum::actingAs($this->agent);
@@ -113,7 +115,7 @@ class TicketRelationshipsTest extends TestCase
         $this->assertEquals($workOrder->id, $response->json('data.work_order.id'));
     }
 
-    /** @test */
+    #[Test]
     public function ticket_show_embeds_the_work_order_relationship()
     {
         Sanctum::actingAs($this->agent);
@@ -131,7 +133,7 @@ class TicketRelationshipsTest extends TestCase
         $this->assertEquals($workOrder->work_order_number, $response->json('data.work_order.work_order_number'));
     }
 
-    /** @test */
+    #[Test]
     public function ticket_can_be_unlinked_from_a_work_order()
     {
         Sanctum::actingAs($this->agent);
@@ -150,7 +152,7 @@ class TicketRelationshipsTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function knowledge_reference_can_be_attached_and_listed()
     {
         Sanctum::actingAs($this->agent);
@@ -175,7 +177,7 @@ class TicketRelationshipsTest extends TestCase
         $this->assertEquals('Used this to recover the ONU.', $refs[0]['note']);
     }
 
-    /** @test */
+    #[Test]
     public function duplicate_knowledge_reference_is_not_duplicated()
     {
         Sanctum::actingAs($this->agent);
@@ -194,7 +196,7 @@ class TicketRelationshipsTest extends TestCase
         $this->assertDatabaseCount('ticket_knowledge_refs', 1);
     }
 
-    /** @test */
+    #[Test]
     public function knowledge_reference_can_be_removed()
     {
         Sanctum::actingAs($this->agent);
@@ -215,7 +217,7 @@ class TicketRelationshipsTest extends TestCase
         $this->assertDatabaseCount('ticket_knowledge_refs', 0);
     }
 
-    /** @test */
+    #[Test]
     public function referencing_unknown_article_is_rejected()
     {
         Sanctum::actingAs($this->agent);

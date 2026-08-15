@@ -316,6 +316,16 @@ class RolesAndPermissionsSeeder extends Seeder
 
             /*
             |--------------------------------------------------------------------------
+            | Incidents
+            |--------------------------------------------------------------------------
+            */
+            'view incidents',
+            'create incidents',
+            'edit incidents',
+            'delete incidents',
+
+            /*
+            |--------------------------------------------------------------------------
             | Fiber / OLT
             |--------------------------------------------------------------------------
             */
@@ -552,6 +562,10 @@ class RolesAndPermissionsSeeder extends Seeder
 // NOC
             'view network',
             'manage network',
+            'view incidents',
+            'create incidents',
+            'edit incidents',
+            'delete incidents',
 
             // Fiber / OLT
             'view fiber',
@@ -662,6 +676,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
                         // NOC (view-only for staff)
             'view network',
+            'view incidents',
             'view rmas',
         ]);
 

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -24,7 +26,7 @@ class PaymentIdempotencyTest extends TestCase
         $this->client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
     }
 
-    /** @test */
+    #[Test]
     public function duplicate_mpesa_callback_creates_single_payment(): void
     {
         $invoice = Invoice::create([
@@ -82,7 +84,7 @@ class PaymentIdempotencyTest extends TestCase
         $this->assertEquals(1500, (float) $payment->amount);
     }
 
-    /** @test */
+    #[Test]
     public function duplicate_payment_reference_is_deduplicated(): void
     {
         $invoice = Invoice::create([
@@ -132,7 +134,7 @@ class PaymentIdempotencyTest extends TestCase
         $this->assertLessThanOrEqual(1, $payments->count(), 'Duplicate callbacks must not create multiple payments');
     }
 
-    /** @test */
+    #[Test]
     public function partial_payment_then_full_payment_updates_invoice_correctly(): void
     {
         $invoice = Invoice::create([
@@ -211,7 +213,7 @@ class PaymentIdempotencyTest extends TestCase
         $this->assertNotNull($invoice->paid_at);
     }
 
-    /** @test */
+    #[Test]
     public function overpayment_does_not_corrupt_invoice_state(): void
     {
         $invoice = Invoice::create([
@@ -256,7 +258,7 @@ class PaymentIdempotencyTest extends TestCase
         $this->assertEquals('paid', $invoice->status);
     }
 
-    /** @test */
+    #[Test]
     public function payment_triggers_account_extension(): void
     {
         $plan = \App\Models\Plan::factory()->create([

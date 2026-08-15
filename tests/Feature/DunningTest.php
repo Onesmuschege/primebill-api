@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Jobs\SuspendNetworkAccessJob;
 use App\Models\Client;
 use App\Models\ClientAccount;
@@ -71,7 +73,7 @@ class DunningTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function email_step_is_executed_and_recorded(): void
     {
         Mail::fake();
@@ -88,7 +90,7 @@ class DunningTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function furthest_applicable_step_is_selected(): void
     {
         Mail::fake();
@@ -103,7 +105,7 @@ class DunningTest extends TestCase
         $this->assertSame('sms', $run->dunningStep->action);
     }
 
-    /** @test */
+    #[Test]
     public function dunning_is_idempotent_per_invoice_and_step(): void
     {
         Mail::fake();
@@ -118,7 +120,7 @@ class DunningTest extends TestCase
         $this->assertSame(1, $runs->count());
         $this->assertSame('suspend', $runs->first()->dunningStep->action);
     }
-/** @test */
+#[Test]
     public function suspension_step_suspends_accounts_and_dispatches_job(): void
     {
         Mail::fake();
@@ -162,7 +164,7 @@ class DunningTest extends TestCase
         Queue::assertPushed(SuspendNetworkAccessJob::class, fn ($job) => $job->accountId === $account->id);
     }
 
-    /** @test */
+    #[Test]
     public function overdue_notification_is_dispatched_on_first_notice(): void
     {
         Mail::fake();
@@ -177,7 +179,7 @@ class DunningTest extends TestCase
         Notification::assertSentTo($client, DunningSent::class);
     }
 
-    /** @test */
+    #[Test]
     public function suspension_notification_is_dispatched(): void
     {
         Mail::fake();
@@ -191,7 +193,7 @@ class DunningTest extends TestCase
         Notification::assertSentTo($client, AccountSuspended::class);
     }
 
-    /** @test */
+    #[Test]
     public function dunning_is_isolated_per_tenant(): void
     {
         Mail::fake();

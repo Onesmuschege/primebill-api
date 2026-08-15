@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\Tenant;
 use App\Models\User;
@@ -44,7 +46,7 @@ class AuthorizationTest extends TestCase
         $this->admin->assignRole($adminRole);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_access_clients_index()
     {
         Sanctum::actingAs($this->admin);
@@ -53,7 +55,7 @@ class AuthorizationTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function user_without_view_clients_permission_is_denied()
     {
         Sanctum::actingAs($this->user);
@@ -62,7 +64,7 @@ class AuthorizationTest extends TestCase
             ->assertStatus(403);
     }
 
-    /** @test */
+    #[Test]
     public function permission_denied_is_audited_in_system_log()
     {
         Sanctum::actingAs($this->user);
@@ -76,7 +78,7 @@ class AuthorizationTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function user_with_view_clients_permission_can_access()
     {
         $role = Role::findOrCreate('viewer');
@@ -89,7 +91,7 @@ class AuthorizationTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function user_without_view_inventory_permission_cannot_access_inventory()
     {
         Sanctum::actingAs($this->user);
@@ -98,7 +100,7 @@ class AuthorizationTest extends TestCase
             ->assertStatus(403);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_access_inventory()
     {
         Sanctum::actingAs($this->admin);

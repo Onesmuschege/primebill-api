@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Automation;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Events\ClientCreated;
 use App\Events\ClientUpdated;
 use App\Models\AutomationEvent;
@@ -21,7 +23,7 @@ class ClientEventDispatchTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function creating_and_updating_a_client_dispatches_the_automation_events(): void
     {
         config(['automation.enabled' => true]);
@@ -43,7 +45,7 @@ class ClientEventDispatchTest extends TestCase
         $this->assertSame(2, AutomationEvent::count());
     }
 
-    /** @test */
+    #[Test]
     public function observers_are_silent_when_automation_is_disabled(): void
     {
         // phpunit.xml sets AUTOMATION_ENABLED=false — observers must no-op.

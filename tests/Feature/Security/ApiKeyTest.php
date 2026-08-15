@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -33,7 +35,7 @@ class ApiKeyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_create_api_key()
     {
         Sanctum::actingAs($this->user);
@@ -60,7 +62,7 @@ class ApiKeyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_list_their_api_keys()
     {
         Sanctum::actingAs($this->user);
@@ -90,7 +92,7 @@ class ApiKeyTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_revoke_their_api_key()
     {
         Sanctum::actingAs($this->user);
@@ -117,7 +119,7 @@ class ApiKeyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function user_cannot_revoke_someone_elses_api_key()
     {
         $otherUser = User::create([
@@ -146,7 +148,7 @@ class ApiKeyTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function unauthenticated_user_cannot_access_api_keys()
     {
         $response = $this->getJson('/api/api-keys');

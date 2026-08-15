@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\Tenant;
 use App\Models\User;
@@ -66,7 +68,7 @@ class IncidentTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_create_incident()
     {
         Sanctum::actingAs($this->admin);
@@ -99,7 +101,7 @@ class IncidentTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function user_without_permission_cannot_create_incident()
     {
         Sanctum::actingAs($this->user);
@@ -110,7 +112,7 @@ class IncidentTest extends TestCase
         ])->assertStatus(403);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_list_incidents()
     {
         $incident = NetworkIncident::create([
@@ -137,7 +139,7 @@ class IncidentTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_acknowledge_incident()
     {
         $incident = NetworkIncident::create([
@@ -165,7 +167,7 @@ class IncidentTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_resolve_incident()
     {
         $incident = NetworkIncident::create([
@@ -197,7 +199,7 @@ class IncidentTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_close_incident()
     {
         $incident = NetworkIncident::create([
@@ -225,7 +227,7 @@ class IncidentTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function incident_rejects_invalid_transitions()
     {
         $incident = NetworkIncident::create([
@@ -245,7 +247,7 @@ class IncidentTest extends TestCase
         $response->assertStatus(422);
     }
 
-    /** @test */
+    #[Test]
     public function incident_stats_returns_correct_data()
     {
         NetworkIncident::create([
@@ -281,7 +283,7 @@ class IncidentTest extends TestCase
         $this->assertEquals(1, $stats['critical_incidents']);
     }
 
-    /** @test */
+    #[Test]
     public function tenant_isolation_works_for_incidents()
     {
         $tenantB = Tenant::create(['name' => 'Tenant B', 'slug' => 'tenant-b']);
@@ -322,7 +324,7 @@ class IncidentTest extends TestCase
         $this->assertNotContains('Tenant B Incident', $titles);
     }
 
-    /** @test */
+    #[Test]
     public function unauthenticated_user_cannot_access_incidents()
     {
         $this->getJson('/api/incidents')->assertStatus(401);

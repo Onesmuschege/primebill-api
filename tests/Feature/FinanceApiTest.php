@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -36,7 +38,7 @@ class FinanceApiTest extends TestCase
         Sanctum::actingAs($this->user);
     }
 
-    /** @test */
+    #[Test]
     public function wallet_deposit_and_balance_via_api(): void
     {
         $this->postJson('/api/finance/wallet/deposit', [
@@ -50,7 +52,7 @@ class FinanceApiTest extends TestCase
             ->assertJsonPath('data.balance', 1000);
     }
 
-    /** @test */
+    #[Test]
     public function wallet_withdrawal_via_api(): void
     {
         $this->postJson('/api/finance/wallet/deposit', [
@@ -68,7 +70,7 @@ class FinanceApiTest extends TestCase
             ->assertJsonPath('data.balance', 300);
     }
 
-    /** @test */
+    #[Test]
     public function unauthenticated_user_cannot_access_finance(): void
     {
         Sanctum::actingAs(User::factory()->create(['tenant_id' => $this->tenant->id]));
@@ -79,7 +81,7 @@ class FinanceApiTest extends TestCase
         ])->assertStatus(403);
     }
 
-    /** @test */
+    #[Test]
     public function credit_note_issue_and_list_via_api(): void
     {
         $invoice = app(InvoiceService::class)->createInvoice([
@@ -100,7 +102,7 @@ class FinanceApiTest extends TestCase
             ->assertJsonPath('success', true);
     }
 
-    /** @test */
+    #[Test]
     public function debit_note_issue_and_list_via_api(): void
     {
         $invoice = app(InvoiceService::class)->createInvoice([
@@ -121,7 +123,7 @@ class FinanceApiTest extends TestCase
             ->assertJsonPath('success', true);
     }
 
-    /** @test */
+    #[Test]
     public function refund_issue_and_list_via_api(): void
     {
         $invoice = app(InvoiceService::class)->createInvoice([
@@ -150,7 +152,7 @@ class FinanceApiTest extends TestCase
             ->assertJsonPath('success', true);
     }
 
-    /** @test */
+    #[Test]
     public function trial_balance_and_ledger_verify_via_api(): void
     {
         // Create an invoice to create ledger entries.
@@ -170,7 +172,7 @@ class FinanceApiTest extends TestCase
             ->assertJsonPath('data.balanced', true);
     }
 
-    /** @test */
+    #[Test]
     public function payment_plan_create_via_api(): void
     {
         $invoice = app(InvoiceService::class)->createInvoice([

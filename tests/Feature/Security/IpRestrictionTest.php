@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -32,7 +34,7 @@ class IpRestrictionTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function user_without_restrictions_is_not_blocked()
     {
         Sanctum::actingAs($this->user);
@@ -41,7 +43,7 @@ class IpRestrictionTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function user_with_matching_ip_is_allowed()
     {
         $this->user->update([
@@ -54,7 +56,7 @@ class IpRestrictionTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function user_with_non_matching_ip_is_denied()
     {
         $this->user->update([
@@ -70,7 +72,7 @@ class IpRestrictionTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function user_with_cidr_range_is_allowed()
     {
         $this->user->update([
@@ -83,7 +85,7 @@ class IpRestrictionTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function user_with_cidr_range_that_does_not_match_is_denied()
     {
         $this->user->update([

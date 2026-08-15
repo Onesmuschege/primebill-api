@@ -21,23 +21,23 @@ class LogController extends Controller
     {
         $query = SystemLog::with('user');
 
-        if ($request->has('user_id')) {
+        if ($request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
         }
 
-        if ($request->has('action')) {
+        if ($request->filled('action')) {
             $query->where('action', 'like', '%' . $request->action . '%');
         }
 
-        if ($request->has('model')) {
+        if ($request->filled('model')) {
             $query->where('model', $request->model);
         }
 
-        if ($request->has('from')) {
+        if ($request->filled('from')) {
             $query->whereDate('created_at', '>=', $request->from);
         }
 
-        if ($request->has('to')) {
+        if ($request->filled('to')) {
             $query->whereDate('created_at', '<=', $request->to);
         }
 
@@ -66,11 +66,11 @@ class LogController extends Controller
     {
         $query = SystemLog::with('user');
 
-        if ($request->has('from')) {
+        if ($request->filled('from')) {
             $query->whereDate('created_at', '>=', $request->from);
         }
 
-        if ($request->has('to')) {
+        if ($request->filled('to')) {
             $query->whereDate('created_at', '<=', $request->to);
         }
 

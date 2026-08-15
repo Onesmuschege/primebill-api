@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -32,7 +34,7 @@ class SessionTest extends TestCase
         ]);
     }
 
-/** @test */
+#[Test]
     public function authenticated_user_can_list_their_sessions()
     {
         Sanctum::actingAs($this->user);
@@ -57,7 +59,7 @@ class SessionTest extends TestCase
         $this->assertCount(3, $response->json('data.data'));
     }
 
-    /** @test */
+    #[Test]
     public function user_can_revoke_a_session()
     {
         Sanctum::actingAs($this->user);
@@ -74,7 +76,7 @@ class SessionTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function user_cannot_revoke_someone_elses_session()
     {
         $otherUser = User::create([
@@ -98,7 +100,7 @@ class SessionTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function user_can_revoke_all_other_sessions()
     {
         $this->user->createToken('stale-session-1');

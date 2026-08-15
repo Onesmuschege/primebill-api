@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\Tenant;
 use App\Models\User;
@@ -54,7 +56,7 @@ class IncidentEscalationTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function open_incident_can_be_escalated()
     {
         Sanctum::actingAs($this->admin);
@@ -80,7 +82,7 @@ class IncidentEscalationTest extends TestCase
         $this->assertEquals('Customers beyond 500 affected, requires senior NOC', $response->json('data.escalation_reason'));
     }
 
-    /** @test */
+    #[Test]
     public function escalation_requires_a_reason()
     {
         Sanctum::actingAs($this->admin);
@@ -97,7 +99,7 @@ class IncidentEscalationTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function escalation_raises_level_up_to_the_cap()
     {
         Sanctum::actingAs($this->admin);
@@ -117,7 +119,7 @@ class IncidentEscalationTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function resolved_and_closed_incidents_cannot_be_escalated()
     {
         Sanctum::actingAs($this->admin);
@@ -133,7 +135,7 @@ class IncidentEscalationTest extends TestCase
         ])->assertStatus(422);
     }
 
-    /** @test */
+    #[Test]
     public function escalation_does_not_break_the_incident_lifecycle()
     {
         Sanctum::actingAs($this->admin);

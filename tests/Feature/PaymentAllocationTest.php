@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\LedgerEntry;
@@ -70,7 +72,7 @@ class PaymentAllocationTest extends TestCase
         ], $this->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function payment_can_be_allocated_across_multiple_invoices(): void
     {
         $invoices = $this->makeInvoices(2, 1000);
@@ -97,7 +99,7 @@ class PaymentAllocationTest extends TestCase
         $this->assertTrue($this->ledgerService->isBalanced());
     }
 
-    /** @test */
+    #[Test]
     public function allocation_cannot_exceed_payment_amount(): void
     {
         $invoices = $this->makeInvoices(1, 1000);
@@ -114,7 +116,7 @@ class PaymentAllocationTest extends TestCase
         ], $this->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function allocation_rejects_invoice_from_other_client(): void
     {
         $otherClient = Client::factory()->create(['tenant_id' => $this->tenant->id]);
@@ -136,7 +138,7 @@ class PaymentAllocationTest extends TestCase
         ], $this->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function allocation_is_idempotent(): void
     {
         $invoices = $this->makeInvoices(1, 1000);
@@ -160,7 +162,7 @@ class PaymentAllocationTest extends TestCase
         $this->assertEquals(1, PaymentAllocation::count());
     }
 
-    /** @test */
+    #[Test]
     public function cannot_allocate_a_non_completed_payment(): void
     {
         $invoices = $this->makeInvoices(1, 1000);
@@ -182,7 +184,7 @@ class PaymentAllocationTest extends TestCase
         ], $this->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function allocation_can_be_reversed_and_ledger_stays_balanced(): void
     {
         $invoices = $this->makeInvoices(1, 1000);
@@ -209,7 +211,7 @@ class PaymentAllocationTest extends TestCase
         $this->assertTrue($this->ledgerService->isBalanced());
     }
 
-    /** @test */
+    #[Test]
     public function reversing_an_already_reversed_allocation_throws(): void
     {
         $invoices = $this->makeInvoices(1, 1000);
@@ -230,7 +232,7 @@ class PaymentAllocationTest extends TestCase
         $this->service->reverse($allocation->fresh(), $this->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_create_allocation_via_api(): void
     {
         Sanctum::actingAs($this->user);
@@ -250,7 +252,7 @@ class PaymentAllocationTest extends TestCase
             ->assertJsonPath('success', true);
     }
 
-    /** @test */
+    #[Test]
     public function unauthenticated_user_cannot_access_payment_allocations(): void
     {
         $response = $this->getJson('/api/payment-allocations');
@@ -258,7 +260,7 @@ class PaymentAllocationTest extends TestCase
         $response->assertStatus(401);
     }
 
-    /** @test */
+    #[Test]
     public function tenant_isolation_blocks_cross_tenant_allocation(): void
     {
         $otherTenant = Tenant::factory()->create(['status' => 'active']);
@@ -283,7 +285,7 @@ class PaymentAllocationTest extends TestCase
         ], $this->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function allocation_records_reflective_ledger_entries(): void
     {
         $invoices = $this->makeInvoices(1, 1000);

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\FieldOperations;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\Client;
 use App\Models\Tenant;
@@ -66,7 +68,7 @@ class WorkOrderVerificationTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function completed_work_order_can_be_verified()
     {
         Sanctum::actingAs($this->ops);
@@ -89,7 +91,7 @@ class WorkOrderVerificationTest extends TestCase
         $this->assertNotNull($response->json('data.verified_at'));
     }
 
-    /** @test */
+    #[Test]
     public function non_completed_work_order_cannot_be_verified()
     {
         Sanctum::actingAs($this->ops);
@@ -107,7 +109,7 @@ class WorkOrderVerificationTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function status_history_timeline_is_returned()
     {
         Sanctum::actingAs($this->ops);

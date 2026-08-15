@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Network;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Models\Client;
 use App\Models\ClientAccount;
 use App\Models\Plan;
@@ -34,7 +36,7 @@ class RADIUSAuthorizationTest extends TestCase
         $this->client = Client::factory()->create(['tenant_id' => $this->tenant->id, 'status' => 'active']);
     }
 
-    /** @test */
+    #[Test]
     public function radius_adapter_generates_correct_bandwidth_policy(): void
     {
         $plan = Plan::factory()->create([
@@ -68,7 +70,7 @@ class RADIUSAuthorizationTest extends TestCase
         $this->assertEquals('3072k/30720k', $rateLimit);
     }
 
-    /** @test */
+    #[Test]
     public function radius_adapter_handles_zero_speeds_with_defaults(): void
     {
         $plan = Plan::factory()->create([
@@ -89,7 +91,7 @@ class RADIUSAuthorizationTest extends TestCase
         $this->assertEquals('512k/1024k', $rateLimit);
     }
 
-    /** @test */
+    #[Test]
     public function provisioning_service_syncs_radius_user(): void
     {
         $plan = Plan::factory()->create([
@@ -182,7 +184,7 @@ class RADIUSAuthorizationTest extends TestCase
         $this->assertEquals('1024k/10240k', $radiusAdapter->lastCreateUserData['rate_limit']);
     }
 
-    /** @test */
+    #[Test]
     public function provisioning_service_handles_mikrotik_failure_gracefully(): void
     {
         $plan = Plan::factory()->create([

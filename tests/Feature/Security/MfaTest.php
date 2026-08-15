@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -32,7 +34,7 @@ class MfaTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_generate_mfa_secret()
     {
         Sanctum::actingAs($this->user);
@@ -46,7 +48,7 @@ class MfaTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_enable_mfa_with_valid_code()
     {
         Sanctum::actingAs($this->user);
@@ -73,7 +75,7 @@ class MfaTest extends TestCase
         $this->assertTrue($this->user->mfa_enabled);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_disable_mfa_with_password()
     {
         $this->user->update([
@@ -97,7 +99,7 @@ class MfaTest extends TestCase
         $this->assertFalse($this->user->mfa_enabled);
     }
 
-    /** @test */
+    #[Test]
     public function user_cannot_disable_mfa_with_wrong_password()
     {
         $this->user->update([
@@ -121,7 +123,7 @@ class MfaTest extends TestCase
         $this->assertTrue($this->user->mfa_enabled);
     }
 
-    /** @test */
+    #[Test]
     public function unauthenticated_user_cannot_access_mfa_endpoints()
     {
         $response = $this->postJson('/api/mfa/generate');

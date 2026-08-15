@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\Client;
 use App\Models\Router;
@@ -39,7 +41,7 @@ class TenantIsolationTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function client_from_other_tenant_is_not_visible()
     {
         Client::create([
@@ -72,7 +74,7 @@ class TenantIsolationTest extends TestCase
         $this->assertNotContains('clientb@example.com', $emails);
     }
 
-    /** @test */
+    #[Test]
     public function router_from_other_tenant_is_not_visible()
     {
         Router::create([
@@ -94,7 +96,7 @@ class TenantIsolationTest extends TestCase
         $this->assertNotContains('Tenant B Router', $names);
     }
 
-    /** @test */
+    #[Test]
     public function tenant_b_data_is_not_accessible_by_id()
     {
         $clientB = Client::create([
@@ -115,7 +117,7 @@ class TenantIsolationTest extends TestCase
         $resp->assertStatus(404);
     }
 
-    /** @test */
+    #[Test]
     public function auto_injects_tenant_id_on_create()
     {
         $this->userA->givePermissionTo('create clients');
@@ -135,6 +137,51 @@ class TenantIsolationTest extends TestCase
         $clientId = $response->json('data.id');
         $this->assertDatabaseHas('clients', [
             'id' => $clientId,
+            'tenant_id' => $this->tenantA->id,
+        ]);
+    }
+
+    #[Test]
+    public function admin_users_from_other_tenant_are_not_visible()
+    {
+        // Another admin belonging to tenant B must never appear in tenant A's
+        // admin-users list. User has no BelongsToTenant global scope (login needs
+        // to look up by email), so the controller must scope explicitly — this
+        // test guards against regressions in that manual scoping.
+        User::create([
+            'name' => 'Admin B',
+            'email' => 'adminb@example.com',
+            'password' => bcrypt('password123'),
+            'tenant_id' => $this->tenantB->id,
+        ]);
+
+        Sanctum::actingAs($this->userA);
+
+        $response = $this->getJson('/api/admin/users');
+        $response->assertStatus(200);
+
+        $users = $response->json('data');
+        $emails = array_column($users, 'email');
+
+        $this->assertNotContains('adminb@example.com', $emails);
+    }
+
+    #[Test]
+    public function created_admin_user_is_assigned_to_current_tenant()
+    {
+        Sanctum::actingAs($this->userA);
+
+        $response = $this->postJson('/api/admin/users', [
+            'name' => 'New Staff',
+            'email' => 'newstaff@example.com',
+            'password' => 'password123',
+            'role' => 'staff',
+        ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $response->json('data.id'),
             'tenant_id' => $this->tenantA->id,
         ]);
     }

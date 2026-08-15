@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Models\Client;
 use App\Models\DunningRun;
 use App\Models\DunningStep;
@@ -74,7 +76,7 @@ class CollectionsApiTest extends TestCase
     // Aging dashboard
     // ─────────────────────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function aging_dashboard_buckets_overdue_invoices(): void
     {
         $this->authAsAdmin();
@@ -92,7 +94,7 @@ class CollectionsApiTest extends TestCase
         $this->assertSame(1, $response->json('data.clients.0.invoice_count'));
     }
 
-    /** @test */
+    #[Test]
     public function aging_dashboard_is_tenant_scoped(): void
     {
         $this->authAsAdmin();
@@ -122,7 +124,7 @@ class CollectionsApiTest extends TestCase
     // Dunning step ladder CRUD
     // ─────────────────────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function can_create_list_update_and_delete_a_dunning_step(): void
     {
         $this->authAsAdmin();
@@ -156,7 +158,7 @@ class CollectionsApiTest extends TestCase
         $this->assertDatabaseMissing('dunning_steps', ['id' => $stepId]);
     }
 
-    /** @test */
+    #[Test]
     public function step_validation_rejects_unknown_action(): void
     {
         $this->authAsAdmin();
@@ -169,7 +171,7 @@ class CollectionsApiTest extends TestCase
         ])->assertStatus(422);
     }
 
-    /** @test */
+    #[Test]
     public function can_reorder_the_step_ladder(): void
     {
         $this->authAsAdmin();
@@ -192,7 +194,7 @@ class CollectionsApiTest extends TestCase
     // Dunning execution (manual run now)
     // ─────────────────────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function run_now_executes_the_email_step_and_is_idempotent(): void
     {
         Mail::fake();
@@ -214,7 +216,7 @@ class CollectionsApiTest extends TestCase
         $this->assertSame(1, DunningRun::count());
     }
 
-    /** @test */
+    #[Test]
     public function run_history_is_listable_and_tenant_scoped(): void
     {
         Mail::fake();
@@ -247,7 +249,7 @@ class CollectionsApiTest extends TestCase
     // Authorization & isolation
     // ─────────────────────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function staff_with_view_only_cannot_mutate_the_ladder(): void
     {
         $viewOnly = User::factory()->create(['tenant_id' => $this->tenant->id]);
@@ -264,14 +266,14 @@ class CollectionsApiTest extends TestCase
         $this->getJson('/api/collections/aging')->assertOk();
     }
 
-    /** @test */
+    #[Test]
     public function unauthenticated_requests_are_blocked(): void
     {
         $this->getJson('/api/collections/aging')->assertUnauthorized();
         $this->postJson('/api/collections/run')->assertUnauthorized();
     }
 
-    /** @test */
+    #[Test]
     public function another_tenants_step_is_not_visible_and_404s_on_show(): void
     {
         $this->authAsAdmin();

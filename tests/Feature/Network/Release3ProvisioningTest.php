@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Network;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use App\Models\Client;
 use App\Models\ClientAccount;
 use App\Models\Invoice;
@@ -41,7 +43,7 @@ class Release3ProvisioningTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
+    #[Test]
     public function reconcile_all_suspends_entitled_account_that_has_overdue_invoice(): void
     {
         $account = ClientAccount::factory()->create([
@@ -76,7 +78,7 @@ class Release3ProvisioningTest extends TestCase
         ]);
     }
 
-        /** @test */
+        #[Test]
     public function reconcile_all_restores_suspended_account_when_client_is_entitled(): void
     {
         $account = ClientAccount::factory()->create([
@@ -102,7 +104,7 @@ class Release3ProvisioningTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function provisioning_service_records_structured_log_on_activate_success(): void
     {
         $account = ClientAccount::factory()->create([
@@ -129,7 +131,7 @@ class Release3ProvisioningTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function provisioning_service_records_failure_when_account_has_no_plan(): void
     {
         $account = ClientAccount::factory()->create([
@@ -154,19 +156,19 @@ class Release3ProvisioningTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function evaluate_fup_command_runs_and_returns_zero_exit(): void
     {
         $this->artisan('network:evaluate-fup')->assertExitCode(0);
     }
 
-    /** @test */
+    #[Test]
     public function retry_failed_provisioning_command_runs_and_returns_zero_exit(): void
     {
         $this->artisan('network:retry-failed-provisioning')->assertExitCode(0);
     }
 
-    /** @test */
+    #[Test]
     public function fup_service_can_be_resolved_without_a_broken_dependency(): void
     {
         // Regression for the R3 bug where FupService type-hinted

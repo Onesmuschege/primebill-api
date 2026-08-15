@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\Router;
 use App\Models\Tenant;
@@ -40,7 +42,7 @@ class EncryptionTest extends TestCase
         $this->user->assignRole($role);
     }
 
-    /** @test */
+    #[Test]
     public function router_password_is_encrypted_at_rest()
     {
         $router = Router::create([
@@ -63,7 +65,7 @@ class EncryptionTest extends TestCase
         $this->assertEquals('secret123', $router->password);
     }
 
-    /** @test */
+    #[Test]
     public function router_password_is_not_exposed_in_api_response()
     {
         $router = Router::create([
@@ -86,7 +88,7 @@ class EncryptionTest extends TestCase
         $this->assertArrayNotHasKey('password', $response->json());
     }
 
-    /** @test */
+    #[Test]
     public function audit_log_masks_sensitive_data()
     {
         $service = app(\App\Services\Audit\AuditService::class);

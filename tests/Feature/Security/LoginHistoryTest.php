@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -33,7 +35,7 @@ class LoginHistoryTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function login_records_login_history()
     {
         $response = $this->postJson('/api/auth/login', [
@@ -50,7 +52,7 @@ class LoginHistoryTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function failed_login_records_failed_attempt()
     {
         $response = $this->postJson('/api/auth/login', [
@@ -67,7 +69,7 @@ class LoginHistoryTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_view_their_login_history()
     {
         Sanctum::actingAs($this->user);
@@ -98,7 +100,7 @@ class LoginHistoryTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function logout_records_logout_time()
     {
         Sanctum::actingAs($this->user);

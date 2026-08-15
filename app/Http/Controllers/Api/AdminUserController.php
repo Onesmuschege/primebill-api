@@ -14,7 +14,14 @@ class AdminUserController extends Controller
     // GET /api/admin/users
     public function index()
     {
+        // User deliberately has no BelongsToTenant global scope (login must look
+        // up by email before a tenant is known), so every admin-users query must
+        // be tenant-scoped explicitly — otherwise a tenant admin would see every
+        // user across ALL tenants. Resolve the tenant from the authenticated user.
+        $tenantId = auth('sanctum')->user()->tenant_id;
+
         $users = User::with('roles:id,name')
+            ->where('tenant_id', $tenantId)
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'created_at']);
 
@@ -32,9 +39,10 @@ class AdminUserController extends Controller
         ]);
 
         $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => Hash::make($request->password),
+            'name'      => $request->name,
+            'email'     => $request->email,
+            'password'  => Hash::make($request->password),
+            'tenant_id' => auth('sanctum')->user()->tenant_id,
         ]);
 
         $user->assignRole($request->role);
@@ -51,6 +59,12 @@ class AdminUserController extends Controller
     {
         $request->validate(['role' => 'required|string|exists:roles,name']);
 
+        // Defense-in-depth: User route binding is not tenant-scoped, so guard the
+        // target record explicitly to block cross-tenant role assignment.
+        if ((int) $user->tenant_id !== (int) auth('sanctum')->user()->tenant_id) {
+            return response()->json(['success' => false, 'message' => 'Not found.'], 404);
+        }
+
         $user->syncRoles([$request->role]);
 
         return response()->json([
@@ -63,6 +77,11 @@ class AdminUserController extends Controller
     // DELETE /api/admin/users/{user}
     public function destroy(User $user)
     {
+        // Defense-in-depth: guard against deleting another tenant's user.
+        if ((int) $user->tenant_id !== (int) auth('sanctum')->user()->tenant_id) {
+            return response()->json(['success' => false, 'message' => 'Not found.'], 404);
+        }
+
         if ($user->hasRole('super_admin')) {
             return response()->json([
                 'success' => false,

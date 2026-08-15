@@ -184,19 +184,21 @@ class WorkOrderController extends Controller
      */
     public function listTechnicians(): JsonResponse
     {
-        $tenant = Tenant::current();
+        // Resolve the tenant robustly: prefer the bound current tenant, fall back
+        // to the authenticated user's tenant_id (Tenant::current() can be null on
+        // some request paths, and an UNFILTERED User query would leak every
+        // tenant's staff). This endpoint is always hit by an authed tenant user.
+        $tenantId = Tenant::current()?->id ?? auth('sanctum')->user()?->tenant_id;
 
         $technicians = User::query()
-            ->when($tenant, fn($q) => $q->where('tenant_id', $tenant->id))
+            ->when($tenantId, fn($q) => $q->where('tenant_id', $tenantId))
             ->whereHas('roles', function ($q) {
                 $q->whereIn('name', ['staff', 'super_admin', 'admin']);
             })
             ->orderBy('name')
             ->get(['id', 'name', 'email']);
 
-        $result = $technicians->map(function ($tech) use ($tenant) {
-            $tenantId = $tenant?->id;
-
+        $result = $technicians->map(function ($tech) use ($tenantId) {
             $location = TechnicianLocation::query()
                 ->when($tenantId, fn($q) => $q->where('tenant_id', $tenantId))
                 ->where('user_id', $tech->id)

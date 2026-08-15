@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -32,7 +34,7 @@ class SecurityHeadersTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_responses_include_security_headers()
     {
         Sanctum::actingAs($this->user);
@@ -47,7 +49,7 @@ class SecurityHeadersTest extends TestCase
             ->assertHeader('Permissions-Policy');
     }
 
-    /** @test */
+    #[Test]
     public function security_headers_include_content_security_policy()
     {
         Sanctum::actingAs($this->user);
@@ -58,7 +60,7 @@ class SecurityHeadersTest extends TestCase
             ->assertHeader('Content-Security-Policy');
     }
 
-    /** @test */
+    #[Test]
     public function security_headers_include_strict_transport_security()
     {
         Sanctum::actingAs($this->user);

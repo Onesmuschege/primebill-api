@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Security;
 
+use PHPUnit\Framework\Attributes\Test;
+
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Tenant;
@@ -31,7 +33,7 @@ class MfaChallengeTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function login_without_mfa_returns_token()
     {
         $response = $this->postJson('/api/auth/login', [
@@ -48,7 +50,7 @@ class MfaChallengeTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function login_with_mfa_returns_challenge_token()
     {
         $this->user->update([
@@ -74,7 +76,7 @@ class MfaChallengeTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function challenge_with_valid_code_returns_session_token()
     {
         $this->user->update([
@@ -103,7 +105,7 @@ $response->assertStatus(200)
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function challenge_with_invalid_code_returns_error()
     {
         $this->user->update([
@@ -130,7 +132,7 @@ $response->assertStatus(200)
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function challenge_without_mfa_pending_token_is_rejected()
     {
         // Regular auth token (not mfa-pending)
