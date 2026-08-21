@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\LoginHistory;
 use App\Models\SystemLog;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Platform\PlatformAdminService;
 use App\Services\Platform\TenantLifecycleService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * Platform-operator endpoints — this is PrimeBill's own view across every
@@ -30,7 +33,9 @@ class PlatformAdminController extends Controller
     use ApiResponse;
 
     protected PlatformAdminService $platformService;
+
     protected TenantLifecycleService $lifecycleService;
+
     protected AuditService $auditService;
 
     public function __construct(
@@ -50,6 +55,7 @@ class PlatformAdminController extends Controller
     public function stats(Request $request)
     {
         $stats = $this->platformService->getStats();
+
         return $this->success($stats);
     }
 
@@ -63,6 +69,7 @@ class PlatformAdminController extends Controller
             $request->status ?? null,
             $request->search ?? null
         );
+
         return $this->success($tenants);
     }
 
@@ -190,7 +197,7 @@ class PlatformAdminController extends Controller
             'logo_path' => 'nullable|string|max:500',
             'primary_color' => 'nullable|string|max:7',
             'secondary_color' => 'nullable|string|max:7',
-            'custom_domain' => 'nullable|string|max:255|unique:tenants,custom_domain,' . $tenant->id,
+            'custom_domain' => 'nullable|string|max:255|unique:tenants,custom_domain,'.$tenant->id,
         ]);
 
         $tenant = $this->lifecycleService->configureBranding($tenant, $validated, $request);
@@ -374,6 +381,7 @@ class PlatformAdminController extends Controller
     public function tenantHealth(Tenant $tenant)
     {
         $health = $this->lifecycleService->getTenantHealth($tenant);
+
         return $this->success($health);
     }
 
@@ -383,6 +391,7 @@ class PlatformAdminController extends Controller
     public function tenantBilling(Tenant $tenant)
     {
         $billing = $this->lifecycleService->getTenantBilling($tenant);
+
         return $this->success($billing);
     }
 
@@ -392,6 +401,7 @@ class PlatformAdminController extends Controller
     public function tenantSubscription(Tenant $tenant)
     {
         $status = $this->lifecycleService->getSubscriptionStatus($tenant);
+
         return $this->success($status);
     }
 
@@ -417,7 +427,7 @@ class PlatformAdminController extends Controller
         return $this->success(null, 'Impersonation ended');
     }
 
-// ─── Audit Log ────────────────────────────────────────────────────────
+    // ─── Audit Log ────────────────────────────────────────────────────────
 
     /**
      * GET /api/platform/audit-log
@@ -433,34 +443,80 @@ class PlatformAdminController extends Controller
     {
         $validated = $request->validate([
             'tenant_id' => 'nullable|integer|exists:tenants,id',
-            'action'    => 'nullable|string|max:255',
+            'action' => 'nullable|string|max:255',
             'date_from' => 'nullable|date',
-            'date_to'   => 'nullable|date|after_or_equal:date_from',
-            'per_page'  => 'nullable|integer|min:1|max:100',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
         $query = SystemLog::with('user')->orderByDesc('created_at');
 
-        if (!empty($validated['tenant_id'])) {
+        if (! empty($validated['tenant_id'])) {
             $query->where('tenant_id', $validated['tenant_id']);
         }
 
-        if (!empty($validated['action'])) {
-            $query->where('action', 'like', '%' . $validated['action'] . '%');
+        if (! empty($validated['action'])) {
+            $query->where('action', 'like', '%'.$validated['action'].'%');
         }
 
-        if (!empty($validated['date_from'])) {
+        if (! empty($validated['date_from'])) {
             $query->where('created_at', '>=', $validated['date_from']);
         }
 
-        if (!empty($validated['date_to'])) {
-            $query->where('created_at', '<=', $validated['date_to'] . ' 23:59:59');
+        if (! empty($validated['date_to'])) {
+            $query->where('created_at', '<=', $validated['date_to'].' 23:59:59');
         }
 
         $perPage = $validated['per_page'] ?? 20;
         $logs = $query->paginate($perPage);
 
         return $this->success($logs);
+    }
+
+    // ─── Platform Users (READ-ONLY) ─────────────────────────────────────────
+    //
+    // Deliberately read-only. is_platform_admin is the single highest-privilege
+    // flag in the app (it bypasses tenant scoping entirely), so nobody should
+    // be able to grant or revoke it through the UI or an API endpoint. The only
+    // way to change this flag is the CLI command `php artisan platform:make-admin
+    // {email}`. This endpoint only lists who currently holds that flag.
+
+    /**
+     * GET /api/platform/users
+     *
+     * Read-only list of every user with is_platform_admin = true. User has no
+     * BelongsToTenant scope, so a plain query already returns cross-tenant rows
+     * (platform admins may have a null tenant_id, or a tenant_id if a tenant
+     * admin was separately CLI-promoted). Last login is the most recent
+     * successful `logged_in_at` from login_history (which IS tenant-scoped, so
+     * it is explicitly queried withoutTenantScope()).
+     */
+    public function platformUsers()
+    {
+        $admins = User::where('is_platform_admin', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'tenant_id', 'created_at']);
+
+        $lastLogins = LoginHistory::withoutTenantScope()
+            ->where('success', true)
+            ->whereIn('user_id', $admins->pluck('id'))
+            ->orderByDesc('logged_in_at')
+            ->get()
+            ->groupBy('user_id')
+            ->map(fn ($rows) => $rows->first()->logged_in_at?->toISOString())
+            ->toArray();
+
+        return $this->success([
+            'note' => 'Platform-admin access is granted/revoked via the CLI only: `php artisan platform:make-admin {email}`. There is intentionally no API or UI to change this flag.',
+            'users' => $admins->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'tenant_id' => $u->tenant_id,
+                'created_at' => $u->created_at->toISOString(),
+                'last_login' => $lastLogins[$u->id] ?? null,
+            ])->values(),
+        ]);
     }
 
     // ─── Create Admin User ─────────────────────────────────────────────────
@@ -476,10 +532,10 @@ class PlatformAdminController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        $user = \App\Models\User::create([
+        $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'password' => \Illuminate\Support\Facades\Hash::make($validated['password']),
+            'password' => Hash::make($validated['password']),
             'tenant_id' => $tenant->id,
         ]);
 

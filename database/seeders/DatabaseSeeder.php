@@ -33,6 +33,10 @@ class DatabaseSeeder extends Seeder
             SubscriptionPlanSeeder::class,
             TenantSubscriptionSeeder::class,
             TenantUserSeeder::class,
+            // Dedicated dev platform admin — MUST run after TenantUserSeeder so
+            // nothing rewrites users afterwards. Idempotent (updateOrCreate on
+            // email) and self-skips in production. See PlatformAdminSeeder.
+            PlatformAdminSeeder::class,
 
             // --- Phase 1: Core settings & infrastructure ---
             SettingsSeeder::class,

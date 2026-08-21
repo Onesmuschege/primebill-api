@@ -28,8 +28,15 @@ Schedule::command('subscriptions:process-expired')->dailyAt('07:45');
 Schedule::command('subscriptions:suspend-expired')->dailyAt('08:00');
 
 // ---------------------------------------------------------------------------
+// PrimeBill's OWN subscription billing of its tenants — platform invoices
+// (separate from the subscriptions:* block above, which is the tenant-side
+// ISS billing engine that an ISP uses to bill ITS clients).
+// ---------------------------------------------------------------------------
+Schedule::command('platform:invoices:generate')->monthlyOn(1, '08:00');
+Schedule::command('platform:invoices:reconcile-overdue')->dailyAt('08:00');
+
+// ---------------------------------------------------------------------------
 // Network / NOC polling — high frequency, matches the existing
-// network:poll-traffic cadence below.
 // ---------------------------------------------------------------------------
 Schedule::command('network:poll-traffic')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('network:poll-metrics')->everyFiveMinutes()->withoutOverlapping();

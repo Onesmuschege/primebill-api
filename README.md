@@ -882,6 +882,14 @@ The platform administrator can be created using:
 php artisan platform:make-admin platform@primebill.co.ke
 ```
 
+A dedicated development platform admin is also seeded automatically by
+`PlatformAdminSeeder` (runs as part of `php artisan migrate:fresh --seed`,
+skips itself in production):
+
+| Name | Email | Password |
+|---|---|---|
+| Platform Administrator | `platform@primebill.test` | `Demo@1234` |
+
 ### Seeder Coverage Principle
 
 Seeders should respect dependency order:
