@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\MpesaTransaction;
 use App\Services\Billing\PaymentService;
+use App\Services\Communication\WhatsAppService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -16,12 +17,14 @@ class MpesaService
 {
     protected string $baseUrl;
     protected PaymentService $paymentService;
+    protected WhatsAppService $whatsAppService;
 
-    public function __construct(PaymentService $paymentService)
+    public function __construct(PaymentService $paymentService, WhatsAppService $whatsAppService)
     {
         $env           = config('mpesa.env');
         $this->baseUrl = config("mpesa.base_url.{$env}");
         $this->paymentService = $paymentService;
+        $this->whatsAppService = $whatsAppService;
     }
 
     // -------------------------------------------------------------------------
@@ -207,6 +210,11 @@ class MpesaService
 
             if ($reactivateClientId) {
                 $this->reactivateIfClear($reactivateClientId);
+                $this->sendPaymentConfirmationNotification(
+                    $reactivateClientId,
+                    (float) ($amount ?? 0),
+                    $mpesaCode ?? $checkoutId
+                );
             }
 
             return true;
@@ -271,6 +279,11 @@ class MpesaService
 
             if ($reactivateClientId) {
                 $this->reactivateIfClear($reactivateClientId);
+                $this->sendPaymentConfirmationNotification(
+                    $reactivateClientId,
+                    (float) $amount,
+                    (string) $mpesaCode
+                );
             }
 
             return true;
@@ -324,6 +337,30 @@ class MpesaService
         Log::info('MpesaService: client reactivated immediately after payment', [
             'client_id' => $clientId,
         ]);
+    }
+
+    /**
+     * Best-effort WhatsApp payment confirmation. Failures here must never
+     * affect the payment that already recorded successfully above — this
+     * runs after the DB transaction has committed, purely as a courtesy
+     * notification.
+     */
+    private function sendPaymentConfirmationNotification(int $clientId, float $amount, string $ref): void
+    {
+        $client = Client::find($clientId);
+
+        if (!$client) {
+            return;
+        }
+
+        try {
+            $this->whatsAppService->sendPaymentConfirmation($client, $amount, $ref);
+        } catch (\Throwable $e) {
+            Log::warning('MpesaService: WhatsApp payment confirmation failed', [
+                'client_id' => $clientId,
+                'message'   => $e->getMessage(),
+            ]);
+        }
     }
 
     // -------------------------------------------------------------------------
