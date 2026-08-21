@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Notifications\AccountSuspended;
 use App\Notifications\DunningSent;
 use App\Notifications\InvoiceOverdue;
+use App\Services\Communication\WhatsAppService;
 use App\Services\Email\EmailService;
 use App\Services\Sms\SmsService;
 use Illuminate\Support\Facades\Log;
@@ -31,19 +32,20 @@ class DunningService
 {
     public function __construct(
         protected EmailService $emailService,
-        protected SmsService $smsService
+        protected SmsService $smsService,
+        protected WhatsAppService $whatsAppService
     ) {}
 
     /**
      * Run the dunning engine for a single tenant.
      *
-     * @return array{newly_overdue:int,email:int,sms:int,suspend:int,escalate:int,skipped:int}
+     * @return array{newly_overdue:int,email:int,sms:int,whatsapp:int,suspend:int,escalate:int,skipped:int}
      */
     public function runForTenant(Tenant $tenant, int $limit = 200): array
     {
         Tenant::setCurrent($tenant);
 
-        $summary = ['newly_overdue' => 0, 'email' => 0, 'sms' => 0, 'suspend' => 0, 'escalate' => 0, 'skipped' => 0];
+        $summary = ['newly_overdue' => 0, 'email' => 0, 'sms' => 0, 'whatsapp' => 0, 'suspend' => 0, 'escalate' => 0, 'skipped' => 0];
 
         try {
             // 1. Transition unpaid past-due invoices to overdue.
@@ -180,6 +182,17 @@ class DunningService
                     'status' => 'sent',
                     'bucket' => 'sms',
                     'notes'  => "SMS step '{$step->name}' sent.",
+                ];
+
+            case 'whatsapp':
+                $this->whatsAppService->sendSuspensionWarning($client, (float) $invoice->total);
+                if ($firstOverdueNotice) {
+                    $client->notify(new InvoiceOverdue($invoice));
+                }
+                return [
+                    'status' => 'sent',
+                    'bucket' => 'whatsapp',
+                    'notes'  => "WhatsApp step '{$step->name}' sent.",
                 ];
 
             case 'suspend':
@@ -360,6 +373,7 @@ class DunningService
             'newly_overdue' => 0,
             'email'         => 0,
             'sms'           => 0,
+            'whatsapp'      => 0,
             'suspend'       => 0,
             'escalate'      => 0,
             'skipped'       => 0,
