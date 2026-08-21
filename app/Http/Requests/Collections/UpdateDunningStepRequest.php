@@ -23,7 +23,7 @@ class UpdateDunningStepRequest extends FormRequest
         return [
             'name'           => ['sometimes', 'required', 'string', 'max:255'],
             'sequence'       => ['sometimes', 'required', 'integer', 'min:1'],
-            'action'         => ['sometimes', 'required', Rule::in(['email', 'sms', 'call', 'suspend', 'escalate'])],
+            'action'         => ['sometimes', 'required', Rule::in(['email', 'sms', 'whatsapp', 'call', 'suspend', 'escalate'])],
             'days_after_due' => ['sometimes', 'required', 'integer', 'min:0'],
             'template'       => ['nullable', 'string'],
             'is_active'      => ['boolean'],
