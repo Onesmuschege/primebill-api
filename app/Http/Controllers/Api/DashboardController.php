@@ -22,30 +22,41 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $stats,
+            'data' => $stats,
         ]);
     }
 
     // GET /api/dashboard/traffic
     public function traffic(Request $request)
     {
-        $period  = $request->get('period', 'day');
+        $period = $request->get('period', 'day');
         $traffic = $this->dashboardService->getTrafficData($period);
 
         return response()->json([
             'success' => true,
-            'data'    => $traffic,
+            'data' => $traffic,
         ]);
     }
 
     // GET /api/dashboard/top-downloaders
-    public function topDownloaders()
+    public function topDownloaders(Request $request)
     {
-        $downloaders = $this->dashboardService->getTopDownloaders();
+        // Dashboard-widget friendly: the caller decides how many rows it can
+        // render (validated 1–50, service default 10). This is a leaderboard
+        // of LIVE radius sessions rather than a fixed dataset, so there is no
+        // meaningful grand "total" to report — the widget frames itself as a
+        // top-N ranking instead.
+        $validated = $request->validate([
+            'limit' => 'nullable|integer|min:1|max:50',
+        ]);
+
+        $downloaders = $this->dashboardService->getTopDownloaders(
+            $validated['limit'] ?? 10
+        );
 
         return response()->json([
             'success' => true,
-            'data'    => $downloaders,
+            'data' => $downloaders,
         ]);
     }
 
@@ -53,8 +64,8 @@ class DashboardController extends Controller
     public function incomeAnalytics(Request $request)
     {
         $request->validate([
-            'from'     => 'required|date',
-            'to'       => 'required|date',
+            'from' => 'required|date',
+            'to' => 'required|date',
             'group_by' => 'nullable|in:day,month,year',
         ]);
 
@@ -66,7 +77,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $data,
+            'data' => $data,
         ]);
     }
 
@@ -77,7 +88,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $data,
+            'data' => $data,
         ]);
     }
 
@@ -88,7 +99,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $data,
+            'data' => $data,
         ]);
     }
 
@@ -99,7 +110,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $data,
+            'data' => $data,
         ]);
     }
 
@@ -110,7 +121,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $data,
+            'data' => $data,
         ]);
     }
 }

@@ -62,13 +62,45 @@ class PlatformAdminController extends Controller
     /**
      * Tenant list with per-tenant client count and revenue, for the
      * platform-admin tenant table.
+     *
+     * Response shape depends on the caller:
+     *   - default (no per_page): the legacy FULL array — kept for existing
+     *     consumers that filter/enrich client-side (PlatformTenants page,
+     *     PlatformSystemHealth).
+     *   - ?per_page=N: a compact dashboard slice — { data, total, current_page,
+     *     per_page, last_page } — so widgets can render "Showing N of TOTAL"
+     *     without pulling every tenant's enriched metrics. The full-page
+     *     /platform/tenants view keeps its own behaviour and is untouched.
      */
     public function tenants(Request $request)
     {
+        $validated = $request->validate([
+            'status' => 'nullable|string|max:32',
+            'search' => 'nullable|string|max:255',
+            'per_page' => 'nullable|integer|min:1|max:50',
+            'page' => 'nullable|integer|min:1',
+        ]);
+
         $tenants = $this->platformService->getTenants(
-            $request->status ?? null,
-            $request->search ?? null
+            $validated['status'] ?? null,
+            $validated['search'] ?? null
         );
+
+        // Opt-in widget mode: slice the enriched list server-side and keep
+        // the real total so dashboards can say "Showing N of TOTAL".
+        if (! empty($validated['per_page'])) {
+            $total = count($tenants);
+            $perPage = (int) $validated['per_page'];
+            $page = max(1, (int) ($validated['page'] ?? 1));
+
+            return $this->success([
+                'data' => array_slice($tenants, ($page - 1) * $perPage, $perPage),
+                'total' => $total,
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'last_page' => (int) ceil($total / $perPage),
+            ]);
+        }
 
         return $this->success($tenants);
     }

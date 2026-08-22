@@ -26,8 +26,8 @@ class FinancialStatementService
 
         $rows = $query->select(
                 'account_type',
-                DB::raw('SUM(CASE WHEN direction = "debit" THEN amount ELSE 0 END) as total_debits'),
-                DB::raw('SUM(CASE WHEN direction = "credit" THEN amount ELSE 0 END) as total_credits')
+                DB::raw("SUM(CASE WHEN direction = 'debit' THEN amount ELSE 0 END) as total_debits"),
+                DB::raw("SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END) as total_credits")
             )
             ->groupBy('account_type')
             ->orderBy('account_type')
@@ -71,20 +71,20 @@ class FinancialStatementService
             $query->whereDate('created_at', '<=', $to);
         }
 
-        $rows = $query->select(
-                DB::raw('DATE_FORMAT(created_at, "%Y-%m") as period'),
-                DB::raw('SUM(amount) as revenue')
-            )
-            ->groupBy('period')
-            ->orderBy('period')
-            ->get();
-
-        $periods = $rows->map(function ($row) {
-            return [
-                'period'  => $row->period,
-                'revenue' => round((float) $row->revenue, 2),
-            ];
-        });
+        // DB-agnostic: fetch matching ledger rows and group by month in PHP,
+        // the same pattern already used in AnalyticsService::monthlyRevenue().
+        // Avoids DATE_FORMAT() (MySQL-only — this codebase runs PostgreSQL in
+        // production and SQLite in tests; Postgres has no DATE_FORMAT() at
+        // all, so the previous raw-SQL version would 500 in production).
+        $periods = $query->get(['created_at', 'amount'])
+            ->groupBy(fn ($entry) => $entry->created_at->format('Y-m'))
+            ->map(fn ($group, $period) => [
+                'period'  => $period,
+                'revenue' => round((float) $group->sum('amount'), 2),
+            ])
+            ->values()
+            ->sortBy('period')
+            ->values();
 
         return [
             'periods'       => $periods,
