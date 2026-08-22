@@ -25,7 +25,7 @@ class MfaController extends Controller
         $secret = $this->mfaService->generateSecret($user);
 
         // In production, generate a proper TOTP QR code using a library like bacon/bacon-qr-code
-        $qrCodeUrl = "otpauth://totap/PrimeBill:" . urlencode($user->email) . "?secret={$secret}&issuer=PrimeBill";
+        $qrCodeUrl = "otpauth://totap/" . config('brand.brand') . ":" . urlencode($user->email) . "?secret={$secret}&issuer=" . config('brand.brand');
 
         return response()->json([
             'secret' => $secret,

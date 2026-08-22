@@ -112,7 +112,7 @@ class InvoiceController extends Controller
 
         $pdf = Pdf::loadView('pdf.invoice', [
             'invoice'         => $invoice,
-            'companyName'     => $company['company_name']    ?? 'PrimeBill ISP',
+            'companyName'     => $company['company_name']    ?? config('brand.company'),
             'companyPhone'    => $company['company_phone']   ?? '',
             'companyEmail'    => $company['company_email']   ?? '',
             'companyPaybill'  => $company['company_paybill'] ?? '',

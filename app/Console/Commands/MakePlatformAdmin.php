@@ -17,7 +17,7 @@ use Illuminate\Console\Command;
 class MakePlatformAdmin extends Command
 {
     protected $signature = 'platform:make-admin {email : Email of the user to grant platform-admin access}';
-    protected $description = 'Grant platform-admin access to a user (cross-tenant access to every ISP on PrimeBill)';
+    protected $description = 'Grant platform-admin access to a user (cross-tenant access to every ISP on the PrimeBill ISP Platform)';
 
     public function handle(): int
     {

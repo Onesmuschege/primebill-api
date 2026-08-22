@@ -40,7 +40,7 @@
 
     <div class="header">
         <div>
-            <p class="company-name">{{ $companyName ?? config('app.name', 'PrimeBill') }}</p>
+            <p class="company-name">{{ $companyName ?? config('brand.company') }}</p>
             <p class="company-meta">
                 @isset($companyEmail) {{ $companyEmail }}<br> @endisset
                 @isset($companyPaybill) Paybill: {{ $companyPaybill }} @endisset
@@ -138,7 +138,7 @@
     @endif
 
     <div class="footer">
-        Generated {{ now()->format('d M Y H:i') }} · {{ $companyName ?? config('app.name', 'PrimeBill') }}
+        Generated {{ now()->format('d M Y H:i') }} · {{ $companyName ?? config('brand.company') }}
     </div>
 
 </body>

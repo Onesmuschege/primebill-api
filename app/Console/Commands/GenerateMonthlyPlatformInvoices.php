@@ -6,7 +6,7 @@ use App\Services\Platform\PlatformBillingService;
 use Illuminate\Console\Command;
 
 /**
- * PrimeBill's own subscription-invoice run: build one platform invoice per
+ * The PrimeBill ISP Platform's own subscription-invoice run: build one platform invoice per
  * active tenant ISP for the current (or given) billing period. Scheduled
  * monthly; safe to re-run (idempotent per tenant + period).
  */
@@ -14,7 +14,7 @@ class GenerateMonthlyPlatformInvoices extends Command
 {
     protected $signature = 'platform:invoices:generate {--period= : Billing period as YYYY-MM (defaults to current month)}';
 
-    protected $description = 'Generate PrimeBill subscription invoices for all active tenants';
+    protected $description = 'Generate PrimeBill ISP Platform subscription invoices for all active tenants';
 
     public function handle(PlatformBillingService $billing): int
     {

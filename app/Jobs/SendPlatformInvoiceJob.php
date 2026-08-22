@@ -51,7 +51,7 @@ class SendPlatformInvoiceJob implements ShouldQueue
             'tenant_id' => $invoice->tenant_id,
             'tenant_name' => $tenantName,
             'to' => $this->toEmail,
-            'subject' => "PrimeBill Invoice {$invoice->invoice_number}",
+            'subject' => config('brand.product') . " Invoice {$invoice->invoice_number}",
         ]);
     }
 

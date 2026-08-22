@@ -53,7 +53,7 @@ class SettingsController extends Controller
         $smsService = new SmsService();
         $sent = $smsService->send(
             $request->phone,
-            'This is a test SMS from PrimeBill. Your SMS gateway is working correctly.'
+            'This is a test SMS from ' . config('brand.brand') . '. Your SMS gateway is working correctly.'
         );
 
         return response()->json([

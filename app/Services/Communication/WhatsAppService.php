@@ -51,7 +51,7 @@ class WhatsAppService
         $message = "Dear {$client->first_name}, your invoice #{$invoice->invoice_number} "
             . "of KES " . number_format($invoice->total, 2) . " is due on "
             . $invoice->due_date?->format('d M Y') . ". "
-            . "Pay via M-Pesa or your client portal. Thank you - PrimeBill ISP.";
+            . "Pay via M-Pesa or your client portal. Thank you - " . config('brand.brand') . ".";
 
         return $this->send($client->phone, $message, $client->id);
     }
@@ -59,7 +59,7 @@ class WhatsAppService
     public function sendPaymentConfirmation(\App\Models\Client $client, float $amount, string $ref): bool
     {
         $message = "Payment confirmed! KES " . number_format($amount, 2)
-            . " received (Ref: {$ref}). Your internet access has been restored. Thank you - PrimeBill ISP.";
+            . " received (Ref: {$ref}). Your internet access has been restored. Thank you - " . config('brand.brand') . ".";
 
         return $this->send($client->phone, $message, $client->id);
     }
@@ -68,7 +68,7 @@ class WhatsAppService
     {
         $message = "Dear {$client->first_name}, your account has an outstanding balance of KES "
             . number_format($outstanding, 2)
-            . ". Please pay within 3 days to avoid suspension. PrimeBill ISP.";
+            . ". Please pay within 3 days to avoid suspension. " . config('brand.brand') . ".";
 
         return $this->send($client->phone, $message, $client->id);
     }

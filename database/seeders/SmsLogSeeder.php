@@ -79,7 +79,7 @@ class SmsLogSeeder extends Seeder
                 'force_fail' => false,
             ],
             [
-                'text'       => "Dear {$name}, payment of Ksh {$amount} received. Thank you! Your internet account is active. For support call 0700000000. PrimeBill Network Solutions.",
+                'text'       => "Dear {$name}, payment of Ksh {$amount} received. Thank you! Your internet account is active. For support call 0700000000. PrimeBill ISP Platform.",
                 'force_fail' => false,
             ],
             [

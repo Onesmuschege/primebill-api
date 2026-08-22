@@ -1,6 +1,8 @@
-# PrimeBill API
+# PrimeBill ISP Platform — API
 
-> **PrimeBill** is a multi-tenant ISP OSS/BSS platform built with Laravel. It provides the backend foundation for subscriber management, billing, payments, network provisioning, FreeRADIUS, MikroTik, FTTH/OLT operations, inventory, support, CRM, communications, reporting, security, and PrimeBill SaaS/platform administration.
+[Branding & nomenclature → BRANDING.md](BRANDING.md)
+
+> **PrimeBill ISP Platform** (short brand: **PrimeBill**) is a multi-tenant ISP OSS/BSS platform built with Laravel. It provides the backend foundation for subscriber management, billing, payments, network provisioning, FreeRADIUS, MikroTik, FTTH/OLT operations, inventory, support, CRM, communications, reporting, security, and PrimeBill ISP Platform SaaS/platform administration.
 
 ![Laravel](https://img.shields.io/badge/Laravel-12.x-red)
 ![PHP](https://img.shields.io/badge/PHP-8.2%2B-blue)
@@ -13,7 +15,7 @@
 
 ## 1. Product Overview
 
-PrimeBill is designed as a complete ISP business and network operations backend rather than a simple billing application.
+PrimeBill ISP Platform is designed as a complete ISP business and network operations backend rather than a simple billing application.
 
 The platform connects:
 
@@ -1155,6 +1157,6 @@ Unauthorized copying, distribution, modification, or commercial use is prohibite
 
 ---
 
-## PrimeBill API
+## PrimeBill ISP Platform — Server
 
 **Built for modern ISP operations and Kenyan broadband businesses.**
