@@ -282,14 +282,24 @@ class DashboardService
 
     private function getAccountStatus(): array
     {
+        // NOTE: 'online'/'offline' are a network-layer split (live RADIUS
+        // sessions vs. the rest of the client base) and always sum to
+        // total_clients. 'overdue' is a *billing*-layer count (clients with
+        // an overdue invoice) and is NOT mutually exclusive with online/
+        // offline — an overdue client can still be online. The two
+        // dimensions must not be added together or displayed as slices of
+        // the same total; `total_clients` is included so callers can render
+        // online/offline as the partition and overdue as a separate,
+        // possibly-overlapping figure.
         $activeUsers  = $this->getActiveUsers();
         $totalClients = $this->safe(fn() => Client::count(), 0);
 
         return [
-            'online'    => $activeUsers,
-            'offline'   => max(0, $totalClients - $activeUsers),
-            'overdue'   => $this->safe(fn() => Invoice::where('status', 'overdue')->distinct('client_id')->count('client_id'), 0),
-            'suspended' => $this->safe(fn() => ClientAccount::where('status', 'suspended')->count(), 0),
+            'online'        => $activeUsers,
+            'offline'       => max(0, $totalClients - $activeUsers),
+            'overdue'       => $this->safe(fn() => Invoice::where('status', 'overdue')->distinct('client_id')->count('client_id'), 0),
+            'suspended'     => $this->safe(fn() => ClientAccount::where('status', 'suspended')->count(), 0),
+            'total_clients' => $totalClients,
         ];
     }
 
@@ -335,11 +345,7 @@ class DashboardService
 
                 $data[] = [
                     'router'  => $router->name,
-                    'traffic' => $traffic->map(fn($t) => [
-                        'time'    => $t->recorded_at,
-                        'tx_mbps' => round($t->tx_bytes / 1048576, 2),
-                        'rx_mbps' => round($t->rx_bytes / 1048576, 2),
-                    ]),
+                    'traffic' => $this->toMbpsSeries($traffic),
                 ];
             }
 
@@ -347,6 +353,58 @@ class DashboardService
         } catch (\Throwable $e) {
             return [];
         }
+    }
+
+    /**
+     * Convert a per-router series of point-in-time byte totals into an
+     * actual Mbps rate.
+     *
+     * Previously this just did `tx_bytes / 1048576` and labeled the result
+     * "tx_mbps" — that only converts bytes to mebibytes, it never converts
+     * to bits (missing the *8) and never divides by any time interval, so
+     * the number shown was really "MiB seen in this sample", not a rate at
+     * all. That's why the chart's Y axis read raw four-figure totals (e.g.
+     * ~3400) instead of a believable Mbps value (e.g. ~24).
+     *
+     * The correct conversion needs a time base: Mbps = bytes * 8 /
+     * elapsed_seconds / 1_000_000. Each row's own elapsed_seconds is
+     * derived from the gap to the previous sample for that router, so this
+     * self-adapts to whatever cadence produced the data (the 20-minute
+     * seeder, or the 5-minute network:poll-traffic scheduled job) without
+     * hardcoding an interval. The first point in a series has no prior
+     * sample to diff against, so it borrows the gap to the point right
+     * after it.
+     *
+     * NOTE: this assumes each row's tx_bytes/rx_bytes is the traffic
+     * *during that interval* — true for the seeder. Real MikroTik
+     * `/interface/print` counters (what network:poll-traffic stores) are
+     * cumulative since interface reset, not per-interval deltas, so live
+     * polled rows would need a delta-from-previous-poll step before this
+     * conversion is meaningful for them — a separate fix in
+     * PollRouterTraffic, not addressed here.
+     */
+    private function toMbpsSeries($traffic): array
+    {
+        $points = $traffic->values();
+        $count  = $points->count();
+
+        return $points->map(function ($t, $i) use ($points, $count) {
+            $prev = $i > 0 ? $points[$i - 1] : null;
+            $next = $i < $count - 1 ? $points[$i + 1] : null;
+
+            $reference = $prev ?? $next;
+            $seconds   = $reference
+                ? max(1, abs(\Illuminate\Support\Carbon::parse($t->recorded_at)->diffInSeconds($reference->recorded_at)))
+                : 1200; // fall back to the seeder's 20-minute cadence for a lone sample
+
+            $toMbps = fn (int $bytes) => round(($bytes * 8) / $seconds / 1_000_000, 2);
+
+            return [
+                'time'    => $t->recorded_at,
+                'tx_mbps' => $toMbps($t->tx_bytes),
+                'rx_mbps' => $toMbps($t->rx_bytes),
+            ];
+        })->all();
     }
 
     public function getTopDownloaders(int $limit = 10): array
