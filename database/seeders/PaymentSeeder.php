@@ -48,8 +48,15 @@ class PaymentSeeder extends Seeder
                     continue;
                 }
 
+                // Payments land close to the invoice's own paid_at (0-2 days
+                // of processing/reconciliation jitter), never further back.
+                // The previous logic subtracted up to 26 extra days from
+                // every invoice regardless of how recent it was — which
+                // pushed even the current billing cycle's payment 27-53+
+                // days into the past, so Income Today/This Month could
+                // never show a non-zero figure from seeded data.
                 $paidAt = Carbon::parse($invoice->paid_at ?? $invoice->created_at)
-                    ->subDays(($index * 3) % 27)
+                    ->subDays($index % 3)
                     ->setTime(9 + ($index % 8), ($index * 11) % 60);
 
                 try {
