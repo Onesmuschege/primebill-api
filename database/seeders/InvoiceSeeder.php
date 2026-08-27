@@ -78,8 +78,38 @@ class InvoiceSeeder extends Seeder
             default => [
                 array_merge($base, ['invoice_number' => $num($counter), 'status' => 'paid',   'due_date' => Carbon::now()->subDays(60), 'paid_at' => Carbon::now()->subDays(58), 'created_at' => Carbon::now()->subDays(62)]),
                 array_merge($base, ['invoice_number' => $num($counter + 1), 'status' => 'paid',   'due_date' => Carbon::now()->subDays(30), 'paid_at' => Carbon::now()->subDays(27), 'created_at' => Carbon::now()->subDays(32)]),
-                array_merge($base, ['invoice_number' => $num($counter + 2), 'status' => 'unpaid', 'due_date' => Carbon::now()->addDays(15), 'paid_at' => null, 'created_at' => Carbon::now()->subDays(2)]),
+                ...$this->currentCycleInvoice($client, $base, $num, $counter + 2),
             ],
         };
+    }
+
+    /**
+     * Every active client's current billing-cycle invoice was previously
+     * always 'unpaid', so no seeded payment ever landed within "this month"
+     * — the dashboard's Income Today/This Month cards were structurally
+     * guaranteed to show Ksh 0 regardless of real activity. ~70% of active
+     * clients (deterministic by client id, so re-seeds are stable) now have
+     * this invoice paid recently — several within the last few days,
+     * including some today — matching a realistic "most clients pay
+     * on time, a few are still pending" distribution.
+     */
+    private function currentCycleInvoice(Client $client, array $base, callable $num, int $n): array
+    {
+        $paidRecently = ($client->id % 10) < 7;
+
+        if (! $paidRecently) {
+            return [
+                array_merge($base, ['invoice_number' => $num($n), 'status' => 'unpaid', 'due_date' => Carbon::now()->addDays(15), 'paid_at' => null, 'created_at' => Carbon::now()->subDays(2)]),
+            ];
+        }
+
+        // Spread payments across the last 6 days (some clients today, most
+        // within the last few days) using the client id for determinism.
+        $daysAgo = $client->id % 7;
+        $paidAt  = Carbon::now()->subDays($daysAgo)->setTime(8 + ($client->id % 10), ($client->id * 13) % 60);
+
+        return [
+            array_merge($base, ['invoice_number' => $num($n), 'status' => 'paid', 'due_date' => Carbon::now()->addDays(15), 'paid_at' => $paidAt, 'created_at' => Carbon::now()->subDays(2)]),
+        ];
     }
 }
