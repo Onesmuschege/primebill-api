@@ -6,6 +6,7 @@ use App\Events\ClientCreated;
 use App\Events\ClientUpdated;
 use App\Models\Client;
 use App\Services\Automation\Automation;
+use App\Services\Dashboard\DashboardService;
 
 /**
  * Fires the ClientCreated / ClientUpdated automation events from the
@@ -26,6 +27,10 @@ class ClientObserver
 
     public function created(Client $client): void
     {
+        // Total Clients / Account Status dashboard cards depend on Client
+        // counts — invalidate the cache on every mutation, automations aside.
+        DashboardService::invalidateStats();
+
         if (! $this->automation->isEnabled()) {
             return;
         }
@@ -35,6 +40,8 @@ class ClientObserver
 
     public function updated(Client $client): void
     {
+        DashboardService::invalidateStats();
+
         if (! $this->automation->isEnabled()) {
             return;
         }

@@ -6,6 +6,7 @@ use App\Events\InvoiceGenerated;
 use App\Events\InvoiceOverdue;
 use App\Models\Invoice;
 use App\Services\Automation\Automation;
+use App\Services\Dashboard\DashboardService;
 
 class InvoiceObserver
 {
@@ -15,6 +16,10 @@ class InvoiceObserver
 
     public function created(Invoice $invoice): void
     {
+        // Overdue-invoice counts and totals feed the cached dashboard stats;
+        // invalidate on every mutation, independent of automation toggles.
+        DashboardService::invalidateStats();
+
         if (! $this->automation->isEnabled()) {
             return;
         }
@@ -23,6 +28,8 @@ class InvoiceObserver
 
     public function updated(Invoice $invoice): void
     {
+        DashboardService::invalidateStats();
+
         if (! $this->automation->isEnabled()) {
             return;
         }

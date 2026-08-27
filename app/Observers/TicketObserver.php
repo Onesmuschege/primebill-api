@@ -6,6 +6,7 @@ use App\Events\TicketCreated;
 use App\Events\SLABreached;
 use App\Models\Ticket;
 use App\Services\Automation\Automation;
+use App\Services\Dashboard\DashboardService;
 
 class TicketObserver
 {
@@ -15,6 +16,10 @@ class TicketObserver
 
     public function created(Ticket $ticket): void
     {
+        // Tickets card (open/pending/solved/total) reads from the cached
+        // dashboard stats — invalidate on every mutation.
+        DashboardService::invalidateStats();
+
         if (! $this->automation->isEnabled()) {
             return;
         }
@@ -23,6 +28,8 @@ class TicketObserver
 
     public function updated(Ticket $ticket): void
     {
+        DashboardService::invalidateStats();
+
         if (! $this->automation->isEnabled()) {
             return;
         }
