@@ -15,4 +15,11 @@ interface RadiusAdapterInterface
     public function syncUsers(): bool;
 
     public function syncUsersToAccount(\App\Models\ClientAccount $account): bool;
+
+    /**
+     * Push a new rate limit (e.g. after FUP throttling) for a user.
+     * Implementations should update the rate-limit attribute for the
+     * username on the RADIUS backend.
+     */
+    public function changeRateLimit(string $username, string $rate): bool;
 }

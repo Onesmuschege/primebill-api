@@ -30,4 +30,15 @@ class RadiusControlService
         // CoA implementation placeholder.
         return true;
     }
+
+    /**
+     * Push a new rate limit for the account to the RADIUS backend
+     * (e.g. after FUP throttling or on FUP reset).
+     */
+    public function changeRateLimit(ClientAccount $account, string $rate): bool
+    {
+        $adapter = app(RadiusAdapterInterface::class);
+
+        return $adapter->changeRateLimit($account->username, $rate);
+    }
 }

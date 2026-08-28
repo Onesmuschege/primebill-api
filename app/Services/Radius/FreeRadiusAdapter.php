@@ -149,6 +149,29 @@ class FreeRadiusAdapter implements RadiusAdapterInterface
         return true;
     }
 
+    public function changeRateLimit(string $username, string $rate): bool
+    {
+        if (!$this->tablesExist()) {
+            return false;
+        }
+
+        // Upsert the rate-limit reply so the next authentication (and the
+        // CoA on live sessions, where configured) picks up the new rate.
+        DB::connection($this->connection)->table('radreply')
+            ->updateOrInsert(
+                [
+                    'username'  => $username,
+                    'attribute' => 'Mikrotik-Rate-Limit',
+                ],
+                [
+                    'op'    => '=',
+                    'value' => $rate,
+                ]
+            );
+
+        return true;
+    }
+
     protected function deleteUserRecords(string $username): void
     {
         foreach (['radcheck', 'radreply', 'radusergroup'] as $table) {

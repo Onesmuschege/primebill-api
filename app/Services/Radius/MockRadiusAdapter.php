@@ -50,4 +50,14 @@ public function syncUsers(): bool
 
         return true;
     }
+
+    public function changeRateLimit(string $username, string $rate): bool
+    {
+        Log::info('MockRadiusAdapter:changeRateLimit', [
+            'username' => $username,
+            'rate'     => $rate,
+        ]);
+
+        return true;
+    }
 }
