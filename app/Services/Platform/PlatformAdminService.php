@@ -5,7 +5,9 @@ namespace App\Services\Platform;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\PlatformInvoice;
 use App\Models\Tenant;
+use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Models\SystemLog;
 use App\Models\Router;
@@ -21,7 +23,9 @@ class PlatformAdminService
      */
     public function getStats(): array
     {
-        return Cache::remember('platform:stats', self::CACHE_TTL, function () {
+        // v2 cache key: invalidates the pre-F1 payload where "mrr" was derived
+        // from tenant-CLIENT payments (wrong semantics — see getOverviewStats).
+        return Cache::remember('platform:stats:v2', self::CACHE_TTL, function () {
             return [
                 'overview' => $this->getOverviewStats(),
                 'tenants' => $this->getTenantStats(),
@@ -30,6 +34,7 @@ class PlatformAdminService
                 'infrastructure' => $this->getInfrastructureStats(),
                 'security' => $this->getSecurityStats(),
                 'activity' => $this->getRecentActivity(),
+                'billing' => $this->getBillingStats(),
             ];
         });
     }
@@ -58,11 +63,20 @@ class PlatformAdminService
             ->where('status', 'completed')
             ->count();
 
-        // Calculate MRR (assuming monthly subscriptions)
-        $mrr = Payment::withoutTenantScope()
-            ->where('status', 'completed')
-            ->where('created_at', '>=', now()->subDays(30))
-            ->sum('amount');
+        // ── Platform MRR/ARR (F1 fix) ────────────────────────────────────────
+        // MRR is PrimeBill's RECURRING REVENUE FROM ITS TENANTS, derived from
+        // TenantSubscription — NOT from tenant-client payments. Tenant-client
+        // payment volume is the ISPs' own business activity, not PrimeBill
+        // revenue. Annual subscriptions are amortized at 1/12 per month so
+        // yearly plans contribute to MRR too. This matches (and now agrees
+        // with) PlatformSubscriptionController::stats.
+        $monthlyMrr = (float) TenantSubscription::where('status', 'active')
+            ->where('billing_cycle', 'monthly')
+            ->sum('price');
+        $annualAmortized = (float) TenantSubscription::where('status', 'active')
+            ->where('billing_cycle', 'annual')
+            ->sum('price') / 12;
+        $mrr = $monthlyMrr + $annualAmortized;
 
         return [
             'total_tenants' => Tenant::count(),
@@ -70,12 +84,34 @@ class PlatformAdminService
             'trial_tenants' => (int) ($tenantCounts['trial'] ?? 0),
             'suspended_tenants' => (int) ($tenantCounts['suspended'] ?? 0),
             'total_clients' => $totalClients,
+            // Client payment volume across all tenants — the ISPs' own billing
+            // activity, NOT PrimeBill revenue. Kept for operational context.
             'total_revenue' => (float) $totalRevenue,
             'mrr' => (float) $mrr,
             'arr' => (float) $mrr * 12,
             'outstanding_invoices' => (float) $outstandingInvoices,
             'total_payments' => $totalPayments,
             'avg_revenue_per_tenant' => $totalClients > 0 ? (float) ($totalRevenue / Tenant::count()) : 0,
+        ];
+    }
+
+    /**
+     * PrimeBill's own commercial position with its tenants — derived from
+     * PlatformInvoice (what PrimeBill bills ISPs for their subscriptions).
+     * Deliberately separate from the client Payment/Invoice volume above.
+     */
+    public function getBillingStats(): array
+    {
+        return [
+            'outstanding_total' => (float) PlatformInvoice::whereIn('status', ['draft', 'sent', 'overdue'])
+                ->sum('total'),
+            'outstanding_overdue_total' => (float) PlatformInvoice::where('status', 'overdue')
+                ->sum('total'),
+            'overdue_count' => PlatformInvoice::where('status', 'overdue')->count(),
+            'paid_this_month' => (float) PlatformInvoice::where('status', 'paid')
+                ->whereMonth('paid_at', now()->month)
+                ->whereYear('paid_at', now()->year)
+                ->sum('total'),
         ];
     }
 
