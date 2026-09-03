@@ -45,6 +45,10 @@ class Kernel extends ConsoleKernel
         // Network Core — retry failed provisioning/CoA operations every 15 minutes
         $schedule->command('network:retry-failed-provisioning')->everyFifteenMinutes();
 
+        // Network Core — router reachability/health probe every 15 minutes
+        // (Sections 43/44 — CONFIGURED vs REACHABLE vs SYNCHRONIZED)
+        $schedule->command('network:check-router-health')->everyFifteenMinutes();
+
         // Service Desk — evaluate ticket SLA targets, mark breaches and auto-escalate every 15 minutes
         $schedule->command('sla:evaluate')->everyFifteenMinutes();
 
