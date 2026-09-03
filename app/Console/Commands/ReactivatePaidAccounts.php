@@ -42,8 +42,14 @@ class ReactivatePaidAccounts extends Command
                     }
 
                     foreach ($client->accounts()->where('status', 'suspended')->get() as $account) {
-                        $account->update(['status' => 'active']);
-                        ActivateNetworkAccessJob::dispatch($account->id, $tenant->id);
+                        // Billing reactivation — never forced. Administratively
+                        // held services are skipped by the lifecycle authority.
+                        ActivateNetworkAccessJob::dispatch(
+                            $account->id,
+                            $tenant->id,
+                            false,
+                            'Billing reactivation: no overdue invoices'
+                        );
                     }
 
                     $client->update(['status' => 'active']);

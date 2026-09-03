@@ -15,7 +15,7 @@ class Invoice extends Model
     protected string $auditAlias = 'Invoice';
 
     protected $fillable = [
-        'client_id', 'subscription_id', 'invoice_number', 'amount',
+        'client_id', 'client_account_id', 'subscription_id', 'invoice_number', 'amount',
         'discount', 'subtotal', 'tax', 'total', 'status', 'due_date',
         'paid_at', 'notes', 'created_by',
     ];
@@ -33,6 +33,15 @@ class Invoice extends Model
     public function client()
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * The specific service this invoice charges (Commercial Transaction
+     * Identity — Section 9). Nullable for legacy/aggregate invoices.
+     */
+    public function clientAccount()
+    {
+        return $this->belongsTo(ClientAccount::class, 'client_account_id');
     }
 
     public function subscription()

@@ -20,13 +20,17 @@ class AccessMethodManager
 
     public function resolve(ClientAccount $account): AccessMethodInterface
     {
-        return match ($account->access_method) {
+        // Legacy rows and accounts created before Network Core Phase A have
+        // no explicit access_method; PPPoE is the platform default.
+        $method = $account->access_method ?: ClientAccount::ACCESS_PPPOE;
+
+        return match ($method) {
             ClientAccount::ACCESS_PPPOE   => $this->pppoe,
             ClientAccount::ACCESS_HOTSPOT => $this->hotspot,
             ClientAccount::ACCESS_STATIC  => $this->staticIp,
             ClientAccount::ACCESS_DHCP    => $this->dhcp,
             default => throw new InvalidArgumentException(
-                "Unsupported access method: {$account->access_method}"
+                "Unsupported access method: {$method}"
             ),
         };
     }

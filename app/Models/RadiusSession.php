@@ -9,6 +9,11 @@ class RadiusSession extends Model
 {
     use BelongsToTenant;
 
+    // Session status vocabulary. Writers (ProcessRadiusAccountingJob) record
+    // live sessions as 'active' and stopped sessions as 'closed'.
+    public const STATUS_ONLINE  = 'active';
+    public const STATUS_OFFLINE = 'closed';
+
     protected $fillable = [
         'username', 'client_account_id', 'ip_address',
         'bytes_in', 'bytes_out', 'session_start',

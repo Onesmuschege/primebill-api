@@ -43,6 +43,8 @@ class ServiceNetworkController extends Controller
             'account'           => $account,
             'is_entitled'       => $account->isEntitled(),
             'service_state'     => $account->service_state,
+            'suspension_type'   => $account->suspension_type,
+            'administrative_hold' => $account->hasAdministrativeHold(),
             'access_method'     => $account->access_method,
             'rate_limit_policy' => $account->rate_limit_policy,
             'active_sessions'   => $activeSessions,
@@ -51,7 +53,7 @@ class ServiceNetworkController extends Controller
     }
 
     /**
-     * Suspend a service.
+     * Suspend a service (operator action → administrative hold, SL2).
      */
     public function suspend(int $accountId, Request $request): JsonResponse
     {
@@ -59,20 +61,33 @@ class ServiceNetworkController extends Controller
 
         $reason = $request->input('reason', 'Manual suspension');
 
-        DB::transaction(function () use ($account, $reason) {
-            $this->lifecycle->suspend($account, $reason);
+        DB::transaction(function () use ($account, $reason, $request) {
+            $this->lifecycle->suspend(
+                $account,
+                $reason,
+                ServiceLifecycleService::SUSPENSION_ADMIN,
+                $request->user()?->id
+            );
         });
 
+        $fresh = $account->fresh();
+
         return response()->json([
-            'message'         => 'Service suspended',
-            'account_id'      => $account->id,
-            'service_state'   => $account->fresh()->service_state,
-            'is_entitled'     => false,
+            'message'             => 'Service suspended',
+            'account_id'          => $account->id,
+            'service_state'       => $fresh->service_state,
+            'suspension_type'     => $fresh->suspension_type,
+            'administrative_hold' => $fresh->hasAdministrativeHold(),
+            'is_entitled'         => $fresh->isEntitled(),
         ]);
     }
 
     /**
      * Restore (activate) a service.
+     *
+     * This is an explicit administrative restore — the only operation that
+     * may lift an administrative hold (SL2). The reported entitlement is
+     * computed truthfully, never fabricated.
      */
     public function restore(int $accountId, Request $request): JsonResponse
     {
@@ -80,15 +95,24 @@ class ServiceNetworkController extends Controller
 
         $reason = $request->input('reason', 'Manual restoration');
 
-        DB::transaction(function () use ($account, $reason) {
-            $this->lifecycle->activate($account, $reason);
+        DB::transaction(function () use ($account, $reason, $request) {
+            $this->lifecycle->activate(
+                $account,
+                $reason,
+                true,
+                $request->user()?->id
+            );
         });
 
+        $fresh = $account->fresh();
+
         return response()->json([
-            'message'         => 'Service restored',
-            'account_id'      => $account->id,
-            'service_state'   => $account->fresh()->service_state,
-            'is_entitled'     => true,
+            'message'             => 'Service restored',
+            'account_id'          => $account->id,
+            'service_state'       => $fresh->service_state,
+            'suspension_type'     => $fresh->suspension_type,
+            'administrative_hold' => $fresh->hasAdministrativeHold(),
+            'is_entitled'         => $fresh->isEntitled(),
         ]);
     }
 
@@ -105,7 +129,9 @@ class ServiceNetworkController extends Controller
         $result = $accessMethod->disconnectSession($account, $sessionId);
 
         return response()->json([
-            'message'     => 'Disconnect sent',
+            'message'     => $result
+                ? 'Active sessions disconnected. The credential remains provisioned.'
+                : 'Failed to disconnect sessions. Check router reachability and retry.',
             'account_id'  => $account->id,
             'session_id'  => $sessionId,
             'success'     => $result,
@@ -150,10 +176,14 @@ class ServiceNetworkController extends Controller
         $result = $this->radiusControl->applyPolicy($account, $policy);
 
         return response()->json([
-            'message'  => 'CoA sent',
-            'account_id' => $account->id,
-            'policy'   => $policy,
-            'success'  => $result,
+            'message'            => $result
+                ? 'Bandwidth policy updated on the RADIUS backend. The active session will pick it up on next reconnect.'
+                : 'Failed to update the bandwidth policy on the RADIUS backend.',
+            'account_id'         => $account->id,
+            'policy'             => $policy,
+            'success'            => $result,
+            'coa_supported'      => false,
+            'requires_reconnect' => true,
         ]);
     }
 }

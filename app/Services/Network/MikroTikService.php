@@ -199,6 +199,86 @@ class MikroTikService
         }
     }
 
+    /**
+     * Terminate live PPPoE sessions for a username.
+     *
+     * This removes entries from /ppp/active — it deliberately does NOT touch
+     * the PPPoE secrets (/ppp/secret), so the credential survives a
+     * disconnect and the customer can reconnect once entitled again.
+     * (Core ISP Gate — Section 20: disconnect ≠ delete.)
+     *
+     * @return bool true when every matching active session was removed.
+     */
+    public function disconnectPPPoE(string $username): bool
+    {
+        try {
+            $query = new Query('/ppp/active/print');
+            $query->where('name', $username);
+            $response = $this->client->query($query)->read();
+
+            if (!is_array($response)) {
+                return false;
+            }
+
+            $removed = 0;
+            foreach ($response as $active) {
+                if (!is_array($active) || empty($active['.id'])) {
+                    continue;
+                }
+
+                $remove = new Query('/ppp/active/remove');
+                $remove->equal('.id', $active['.id']);
+                $this->client->query($remove)->read();
+                $removed++;
+            }
+
+            // Nothing was online — the disconnect is still a success because
+            // the desired end state (no live session) already holds.
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Terminate live hotspot sessions for a username.
+     *
+     * This removes entries from /ip/hotspot/active — it deliberately does NOT
+     * touch the hotspot user (/ip/hotspot/user), so the credential survives a
+     * disconnect and the customer can reconnect once entitled again.
+     * (Core ISP Gate — Section 20: disconnect ≠ delete.)
+     *
+     * @return bool true when every matching active session was removed.
+     */
+    public function disconnectHotspot(string $username): bool
+    {
+        try {
+            $query = new Query('/ip/hotspot/active/print');
+            $query->where('user', $username);
+            $response = $this->client->query($query)->read();
+
+            if (!is_array($response)) {
+                return false;
+            }
+
+            foreach ($response as $active) {
+                if (!is_array($active) || empty($active['.id'])) {
+                    continue;
+                }
+
+                $remove = new Query('/ip/hotspot/active/remove');
+                $remove->equal('.id', $active['.id']);
+                $this->client->query($remove)->read();
+            }
+
+            // Nothing was online — the disconnect is still a success because
+            // the desired end state (no live session) already holds.
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
     private function getPPPoEUserId(string $username): string
     {
         $query = new Query('/ppp/secret/print');

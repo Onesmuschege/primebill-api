@@ -210,18 +210,23 @@ class InvoiceService
             foreach ($client->accounts as $account) {
                 if (!$account->plan) continue;
 
-                // Skip if an unpaid invoice already exists for this account's plan
+                // Skip if an unpaid/overdue invoice already exists for THIS
+                // account. The check must be per-service, otherwise a
+                // multi-service customer only ever gets one invoice per
+                // billing cycle (Section 28 — multi-service identity).
                 $alreadyExists = Invoice::where('client_id', $clientId)
+                    ->where('client_account_id', $account->id)
                     ->whereIn('status', ['unpaid', 'overdue'])
                     ->exists();
 
                 if ($alreadyExists) continue;
 
                 $this->createInvoice([
-                    'client_id' => $clientId,
-                    'amount'    => $account->plan->price,
-                    'due_date'  => now()->addDays(7)->toDateString(),
-                    'status'    => 'unpaid',
+                    'client_id'         => $clientId,
+                    'client_account_id' => $account->id,
+                    'amount'            => $account->plan->price,
+                    'due_date'          => now()->addDays(7)->toDateString(),
+                    'status'            => 'unpaid',
                 ], $userId);
 
                 $count++;

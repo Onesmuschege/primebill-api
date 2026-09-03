@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Models\ClientAccount;
 use App\Models\Tenant;
-use App\Services\Network\ProvisioningService;
+use App\Services\Network\ServiceLifecycleService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -16,12 +16,14 @@ class ActivateNetworkAccessJob implements ShouldQueue
 
     public function __construct(
         public int $accountId,
-        public ?int $tenantId = null
+        public ?int $tenantId = null,
+        public bool $force = false,
+        public ?string $reason = null
     ) {
         $this->onQueue(config('network.provisioning_queue', 'default'));
     }
 
-    public function handle(ProvisioningService $provisioning): void
+    public function handle(ServiceLifecycleService $lifecycle): void
     {
         $this->establishTenantContext();
 
@@ -29,7 +31,10 @@ class ActivateNetworkAccessJob implements ShouldQueue
             $account = ClientAccount::find($this->accountId);
 
             if ($account) {
-                $provisioning->activateAccount($account);
+                // `force` must only be true for explicit administrative
+                // restores — billing-driven reactivation leaves it false so
+                // administrative holds survive (SL2).
+                $lifecycle->activate($account, $this->reason ?? 'Scheduled/billing reactivation', $this->force);
             }
         } finally {
             Tenant::setCurrent(null);

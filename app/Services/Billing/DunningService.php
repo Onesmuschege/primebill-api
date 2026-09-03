@@ -4,6 +4,7 @@ namespace App\Services\Billing;
 
 use App\Jobs\SuspendNetworkAccessJob;
 use App\Models\Client;
+use App\Models\ClientAccount;
 use App\Models\DunningRun;
 use App\Models\DunningStep;
 use App\Models\Invoice;
@@ -227,8 +228,15 @@ class DunningService
         $accounts = $client->accounts()->where('status', 'active')->get();
 
         foreach ($accounts as $account) {
-            $account->update(['status' => 'suspended', 'suspended_at' => now()]);
-            SuspendNetworkAccessJob::dispatch($account->id, $tenant->id);
+            // Billing suspension — flows through the lifecycle authority so
+            // the service is marked billing-suspended and can be restored by
+            // reconciliation once entitlement is valid again (SL2).
+            SuspendNetworkAccessJob::dispatch(
+                $account->id,
+                $tenant->id,
+                ClientAccount::SUSPENSION_BILLING,
+                "Dunning step '{$step->name}'"
+            );
         }
 
         $client->update(['status' => 'suspended']);

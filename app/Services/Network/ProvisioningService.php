@@ -11,8 +11,13 @@ class ProvisioningService
 {
     public function __construct(
         protected RouterAdapterInterface $routerAdapter,
-        protected RadiusAdapterInterface $radiusAdapter
-    ) {}
+        protected RadiusAdapterInterface $radiusAdapter,
+        ?EffectiveRateResolver $rateResolver = null
+    ) {
+        // Allow legacy two-arg construction (tests / ad-hoc callers) without
+        // losing the authoritative rate resolution.
+        $this->rateResolver = $rateResolver ?? app(EffectiveRateResolver::class);
+    }
 
     public function provisionAccount(ClientAccount $account, string $plainPassword): bool
     {
@@ -162,11 +167,10 @@ class ProvisioningService
 
     protected function buildRateLimit(ClientAccount $account): string
     {
-        $plan = $account->plan;
-        $down = $plan->speed_down ?? 1024;
-        $up   = $plan->speed_up ?? 512;
-
-        return "{$up}k/{$down}k";
+        // Section 23 — re-provisioning must honour an active FUP throttle.
+        // Resolving through the single authority prevents a generic
+        // re-provision from overwriting a FUP override with the base rate.
+        return $this->rateResolver->effectiveRate($account);
     }
 
     /**

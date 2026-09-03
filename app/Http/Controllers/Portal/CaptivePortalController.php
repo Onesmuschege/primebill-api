@@ -78,24 +78,27 @@ class CaptivePortalController extends Controller
         $plan = Plan::findOrFail($request->plan_id);
 
         // Create or reuse a pending invoice for this plan purchase.
-        // We reuse the existing InvoiceService pattern if available, otherwise
-        // create directly. The callback reconciles via client_id on the invoice.
+        // The invoice names the exact account+plan being bought (Commercial
+        // Transaction Identity — Section 9) so the payment callback extends
+        // THIS service, not another service the customer may own.
         $invoice = \App\Models\Invoice::firstOrCreate(
             [
-                'client_id' => $account->client_id,
-                'status'    => 'unpaid',
-                'total'     => $plan->price,
+                'client_id'         => $account->client_id,
+                'client_account_id' => $account->id,
+                'status'            => 'unpaid',
+                'total'             => $plan->price,
             ],
             [
-                'client_id'      => $account->client_id,
-                'invoice_number' => 'CPT-' . strtoupper(uniqid()),
-                'issue_date'     => now(),
-                'due_date'       => now()->addHour(),
-                'subtotal'       => $plan->price,
-                'tax'            => 0,
-                'total'          => $plan->price,
-                'status'         => 'unpaid',
-                'notes'          => "Captive portal purchase: {$plan->name}",
+                'client_id'         => $account->client_id,
+                'client_account_id' => $account->id,
+                'invoice_number'    => 'CPT-' . strtoupper(uniqid()),
+                'issue_date'        => now(),
+                'due_date'          => now()->addHour(),
+                'subtotal'          => $plan->price,
+                'tax'               => 0,
+                'total'             => $plan->price,
+                'status'            => 'unpaid',
+                'notes'             => "Captive portal purchase: {$plan->name}",
             ]
         );
 

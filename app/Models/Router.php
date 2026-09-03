@@ -21,6 +21,9 @@ class Router extends Model
         'radius_ip', 'radius_auth_port', 'radius_acct_port',
         'coa_port', 'radius_secret_encrypted', 'nas_identifier',
         'nas_type', 'routeros_version', 'capabilities',
+        // Router health / reachability (Sections 43/44)
+        'health_state', 'last_health_check_at', 'last_health_error',
+        'last_sync_at',
     ];
 
     protected $hidden = ['password', 'radius_secret_encrypted'];
@@ -34,6 +37,8 @@ class Router extends Model
         'radius_acct_port' => 'integer',
         'coa_port' => 'integer',
         'capabilities' => 'array',
+        'last_health_check_at' => 'datetime',
+        'last_sync_at' => 'datetime',
     ];
 
     /**

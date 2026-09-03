@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Jobs\ActivateNetworkAccessJob;
 use App\Jobs\ProvisionClientAccountJob;
+use App\Jobs\PushBandwidthPolicyJob;
 use App\Jobs\SuspendNetworkAccessJob;
 use App\Models\ClientAccount;
 use App\Models\Client;
@@ -29,20 +30,27 @@ class ClientAccountController extends Controller
 
         $plainPassword = $request->password;
 
+        // Truthful provisioning state (Core ISP Gate — Section 15): the
+        // service does not become ACTIVE until the network provisioning job
+        // has succeeded. Claiming `active` here would hide provisioning
+        // failures behind a green badge.
         $account = ClientAccount::create([
             'client_id'    => $client->id,
             'plan_id'      => $request->plan_id,
             'username'     => $request->username,
             'password'     => Hash::make($plainPassword),
             'type'         => $request->type ?? 'prepaid',
-            'status'       => 'active',
+            'status'       => 'pending',
+            'service_state'=> ClientAccount::STATE_PENDING,
             'ip_address'   => $request->ip_address,
             'mac_address'  => $request->mac_address,
             'expiry_date'  => now()->addDays(30),
             'activated_at' => now(),
         ]);
 
-ProvisionClientAccountJob::dispatch($account->id, $plainPassword, $account->tenant_id);
+        // The provisioning job completes the lifecycle transition to ACTIVE
+        // through the lifecycle authority after the network side succeeds.
+        ProvisionClientAccountJob::dispatch($account->id, $plainPassword, $account->tenant_id);
 
         SystemLog::create([
             'user_id'    => $request->user()->id,
@@ -70,16 +78,47 @@ ProvisionClientAccountJob::dispatch($account->id, $plainPassword, $account->tena
         ]);
 
         $previousStatus = $account->status;
+        $previousPlanId = $account->plan_id;
 
+        // Lifecycle transitions must flow through the lifecycle authority —
+        // the raw `status` write would silently diverge from `service_state`.
         $account->update($request->only(
-            'plan_id', 'status', 'ip_address', 'expiry_date'
+            'plan_id', 'ip_address', 'expiry_date'
         ));
 
-        if ($request->filled('status') && $request->status !== $previousStatus) {
-            match ($request->status) {
-                'suspended' => SuspendNetworkAccessJob::dispatch($account->id, $account->tenant_id),
-                'active'    => ActivateNetworkAccessJob::dispatch($account->id, $account->tenant_id),
-                default     => null,
+        // Plan change must converge the network policy on the new plan —
+        // otherwise DB says 30 Mbps while RADIUS still says 10 Mbps
+        // (Core ISP Gate — Section 22). The async job resolves the
+        // FUP-aware effective rate and pushes it via the RADIUS backend plus
+        // CoA, so live sessions pick up the new speed without a reconnect
+        // where the NAS supports it.
+        if ($request->filled('plan_id')
+            && (int) $request->plan_id !== (int) $previousPlanId) {
+            PushBandwidthPolicyJob::dispatch(
+                $account->id,
+                $account->tenant_id,
+                'Plan changed via client account update'
+            );
+        }
+
+        $newStatus = $request->input('status');
+
+        if ($newStatus && $newStatus !== $previousStatus) {
+            match ($newStatus) {
+                'suspended' => SuspendNetworkAccessJob::dispatch(
+                    $account->id,
+                    $account->tenant_id,
+                    ClientAccount::SUSPENSION_ADMIN,
+                    'Account suspended via client account update'
+                ),
+                'active'    => ActivateNetworkAccessJob::dispatch(
+                    $account->id,
+                    $account->tenant_id,
+                    true,
+                    'Account activated via client account update'
+                ),
+                // 'inactive' / 'expired' are not network lifecycle states.
+                default     => $account->update(['status' => $newStatus]),
             };
         }
 

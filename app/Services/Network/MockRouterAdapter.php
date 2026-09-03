@@ -34,6 +34,13 @@ class MockRouterAdapter implements RouterAdapterInterface
         return true;
     }
 
+    public function disconnectSession(string $username): bool
+    {
+        Log::info('MockRouterAdapter:disconnectSession', ['username' => $username]);
+
+        return true;
+    }
+
     public function testConnection(): bool
     {
         Log::info('MockRouterAdapter:testConnection');

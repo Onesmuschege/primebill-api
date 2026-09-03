@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ApiKeyController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AutomationController;
+use App\Http\Controllers\Api\BulkServiceController;
 use App\Http\Controllers\Api\ClientAccountController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\ClientCustomFieldController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\Api\NocController;
 use App\Http\Controllers\Api\OltController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PaymentAllocationController;
+use App\Http\Controllers\Api\OperationalHealthController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\PlatformAdminController;
@@ -331,12 +333,15 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
     Route::prefix('routers')->middleware('permission:view routers')->group(function () {
         Route::get('/', [RouterController::class, 'index']);
         Route::post('/', [RouterController::class, 'store'])->middleware('permission:create routers');
+        // Health endpoints must be declared before the /{router} wildcard.
+        Route::get('/health', [RouterController::class, 'healthAll']);
         Route::get('/{router}', [RouterController::class, 'show']);
         Route::put('/{router}', [RouterController::class, 'update'])->middleware('permission:edit routers');
         Route::delete('/{router}', [RouterController::class, 'destroy'])->middleware('permission:delete routers');
         Route::post('/{router}/test-connection', [RouterController::class, 'testConnection']);
         Route::get('/{router}/resources', [RouterController::class, 'resources']);
         Route::get('/{router}/sessions', [RouterController::class, 'sessions']);
+        Route::get('/{router}/health', [RouterController::class, 'health']);
     });
 
     // Invoices
@@ -349,6 +354,10 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
         Route::put('/{invoice}', [InvoiceController::class, 'update'])->middleware('permission:edit invoices');
         Route::delete('/{invoice}', [InvoiceController::class, 'destroy'])->middleware('permission:delete invoices');
     });
+
+    // Operational health snapshot (Core ISP Gate — Section 64).
+    Route::get('/system/health', [OperationalHealthController::class, 'status'])
+        ->middleware('permission:view network');
 
     // Payments
     Route::prefix('payments')->middleware('permission:view payments')->group(function () {
@@ -742,6 +751,18 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
 
         // Service management actions
         Route::prefix('services')->group(function () {
+            // Section 66 — bulk operations (tenant-safe, per-record isolated,
+            // same authoritative lifecycle/provisioning pipeline as single-ops).
+            // Declared BEFORE {account} routes so `bulk/...` is matched
+            // literally and never falls into route-model binding.
+            Route::prefix('bulk')->group(function () {
+                Route::post('/suspend', [BulkServiceController::class, 'bulkSuspend'])->middleware('permission:suspend clients');
+                Route::post('/restore', [BulkServiceController::class, 'bulkRestore'])->middleware('permission:activate clients');
+                Route::post('/activate', [BulkServiceController::class, 'bulkActivate'])->middleware('permission:activate clients');
+                Route::post('/plan-change', [BulkServiceController::class, 'bulkPlanChange'])->middleware('permission:manage network');
+                Route::post('/retry-provisioning', [BulkServiceController::class, 'bulkRetryProvisioning'])->middleware('permission:manage network');
+            });
+
             Route::get('/{account}/status', [ServiceNetworkController::class, 'status']);
             Route::post('/{account}/suspend', [ServiceNetworkController::class, 'suspend'])->middleware('permission:suspend clients');
             Route::post('/{account}/restore', [ServiceNetworkController::class, 'restore'])->middleware('permission:activate clients');

@@ -9,7 +9,8 @@ class DhcpAccessService implements AccessMethodInterface
 {
     public function __construct(
         protected RouterAdapterInterface $router,
-        protected RadiusAdapterInterface $radius
+        protected RadiusAdapterInterface $radius,
+        protected EffectiveRateResolver $rateResolver
     ) {}
 
     public function provision(ClientAccount $account, string $plainPassword): bool
@@ -34,8 +35,16 @@ class DhcpAccessService implements AccessMethodInterface
 
     public function suspend(ClientAccount $account): bool
     {
-        return $this->router->suspendUser($account->username)
+        $disabled = $this->router->suspendUser($account->username)
             && $this->radius->suspendUser($account->username);
+
+        // Hard disconnect (Section 19, Option A) — disabling future auth does
+        // not drop the customer's live session; force it down now.
+        if ($disabled) {
+            $this->router->disconnectSession($account->username);
+        }
+
+        return $disabled;
     }
 
     public function activate(ClientAccount $account): bool
@@ -57,22 +66,28 @@ class DhcpAccessService implements AccessMethodInterface
 
     public function applyBandwidthPolicy(ClientAccount $account, array $policy): bool
     {
-        return true;
+        $rate = $this->buildRateLimitFromPolicy($account, $policy);
+
+        return $this->radius->changeRateLimit($account->username, $rate);
     }
 
     public function disconnectSession(ClientAccount $account, ?string $sessionId = null): bool
     {
-        return $this->router->deleteUser($account->username);
+        // Terminate the live session ONLY — never delete the credential.
+        return $this->router->disconnectSession($account->username);
+    }
+
+    protected function buildRateLimitFromPolicy(ClientAccount $account, array $policy): string
+    {
+        $down = max(1, (int) ($policy['download_speed'] ?? $account->plan?->speed_down ?? 1024));
+        $up   = max(1, (int) ($policy['upload_speed'] ?? $account->plan?->speed_up ?? 512));
+
+        return "{$up}k/{$down}k";
     }
 
     protected function buildRateLimit(ClientAccount $account): string
     {
-        $plan = $account->plan;
-        if (!$plan) return '512k/1024k';
-
-        $down = $plan->speed_down ? max(1, (int) $plan->speed_down) : 1024;
-        $up = $plan->speed_up ? max(1, (int) $plan->speed_up) : 512;
-
-        return "{$up}k/{$down}k";
+        // FUP-aware effective rate — never the blind base plan rate (Section 23).
+        return $this->rateResolver->effectiveRate($account);
     }
 }

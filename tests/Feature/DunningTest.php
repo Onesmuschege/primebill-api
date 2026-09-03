@@ -159,9 +159,24 @@ class DunningTest extends TestCase
         $account->refresh();
         $client->refresh();
 
-        $this->assertSame('suspended', $account->status);
+        // The dunning step decides THAT a suspension is required and marks the
+        // client profile; the account transition itself is owned by the
+        // lifecycle authority and applied when the dispatched job runs.
         $this->assertSame('suspended', $client->status);
-        Queue::assertPushed(SuspendNetworkAccessJob::class, fn ($job) => $job->accountId === $account->id);
+
+        $job = collect(Queue::pushedJobs()[SuspendNetworkAccessJob::class] ?? [])
+            ->pluck('job')
+            ->first(fn ($job) => $job->accountId === $account->id);
+
+        $this->assertNotNull($job, 'SuspendNetworkAccessJob must be dispatched for the account.');
+        $this->assertSame(ClientAccount::SUSPENSION_BILLING, $job->suspensionType);
+
+        $job->handle(app(\App\Services\Network\ServiceLifecycleService::class));
+
+        $account->refresh();
+        $this->assertSame('suspended', $account->status);
+        $this->assertSame(ClientAccount::STATE_SUSPENDED, $account->service_state);
+        $this->assertSame(ClientAccount::SUSPENSION_BILLING, $account->suspension_type);
     }
 
     #[Test]

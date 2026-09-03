@@ -83,6 +83,26 @@ class MikroTikRouterAdapter implements RouterAdapterInterface
         return $this->mikrotik->enablePPPoEUser($username);
     }
 
+    public function disconnectSession(string $username): bool
+    {
+        $account = $this->resolveAccountForUsername($username);
+        $router  = $this->resolveRouter($account?->plan?->router_id);
+
+        if (!$router || !$this->mikrotik->connect($router)) {
+            Log::warning('MikroTikRouterAdapter: failed to connect for disconnectSession', [
+                'username' => $username,
+            ]);
+
+            return false;
+        }
+
+        if ($account?->plan?->type === 'hotspot') {
+            return $this->mikrotik->disconnectHotspot($username);
+        }
+
+        return $this->mikrotik->disconnectPPPoE($username);
+    }
+
     public function testConnection(): bool
     {
         $router = $this->resolveRouter(null);

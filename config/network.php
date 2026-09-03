@@ -62,6 +62,46 @@ return [
     'radius_webhook_secret' => env('RADIUS_WEBHOOK_SECRET', ''),
 
     /*
+    /*
+    |--------------------------------------------------------------------------
+    | RADIUS CoA / Disconnect (dynamic authorization, RFC 5176)
+    |--------------------------------------------------------------------------
+    |
+    | Live session control. When enabled, rate-limit changes and session
+    | disconnects are sent as real RADIUS CoA-Request (43) /
+    | Disconnect-Request (40) packets to the router's CoA port using the
+    | router's shared secret. CoA is conditional on router support: a NAK,
+    | timeout or unreachable router is reported truthfully — never turned
+    | into a fabricated success.
+    |
+    */
+
+    'coa_enabled' => env('RADIUS_COA_ENABLED', true),
+    'coa_timeout_seconds' => env('RADIUS_COA_TIMEOUT', 3.0),
+    'coa_retries' => env('RADIUS_COA_RETRIES', 1),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Router Health Probing
+    |--------------------------------------------------------------------------
+    */
+
+    'health_probe_enabled' => env('ROUTER_HEALTH_PROBE_ENABLED', true),
+
+    // Seconds after which a last successful probe/sync is considered stale
+    // and a previously-HEALTHY router degrades to DEGRADED (Section 44).
+    'router_stale_after_seconds' => env('ROUTER_HEALTH_STALE_AFTER', 900),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Stale Threshold (minutes)
+    |--------------------------------------------------------------------------
+    |
+    | Minutes without RADIUS interim accounting before a session is
+    | considered stale and eligible for reconciliation.
+    |
+    */
+    /*
     |--------------------------------------------------------------------------
     | Grace Period (days)
     |--------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\SuspendNetworkAccessJob;
+use App\Models\ClientAccount;
 use App\Models\Invoice;
 use App\Models\Tenant;
 use App\Services\Email\EmailService;
@@ -36,8 +37,15 @@ class SuspendOverdueAccounts extends Command
                     $accounts = $invoice->client->accounts()->where('status', 'active')->get();
 
                     foreach ($accounts as $account) {
-                        $account->update(['status' => 'suspended']);
-                        SuspendNetworkAccessJob::dispatch($account->id, $tenant->id);
+                        // Billing suspension flows through the lifecycle
+                        // authority (queued) so `service_state`, `status` and
+                        // the suspension classification stay consistent.
+                        SuspendNetworkAccessJob::dispatch(
+                            $account->id,
+                            $tenant->id,
+                            ClientAccount::SUSPENSION_BILLING,
+                            "Overdue invoice {$invoice->invoice_number}"
+                        );
                     }
 
                     $invoice->client->update(['status' => 'suspended']);

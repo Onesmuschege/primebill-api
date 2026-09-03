@@ -168,6 +168,95 @@ class ProspectService
     }
 
     /**
+     * End-to-end prospect → client conversion (P2 — CRM workflow).
+     *
+     * Creates the Client record (and, when a plan is supplied, the initial
+     * ClientAccount with generated PPP credentials), then marks the prospect
+     * (and its originating lead, if any) as won/converted and links the chain
+     * lead → prospect → client for CRM reporting.
+     *
+     * @param  array{id?:int, plan_id?:int, username?:string, password?:string, notes?:string} $data
+     * @return array{client:Client, account:?ClientAccount}
+     */
+    public function convertToClient(Prospect $prospect, array $data, $userId): array
+    {
+        if ($prospect->status === 'converted') {
+            throw new \InvalidArgumentException('Prospect has already been converted.');
+        }
+
+        $plan = null;
+        if (!empty($data['plan_id'])) {
+            $plan = Plan::findOrFail($data['plan_id']);
+        }
+
+        [$client, $account] = DB::transaction(function () use ($prospect, $data, $plan, $userId) {
+            // 1. Create the client from prospect identity data. Explicit data
+            //    overrides always win over prospect fields.
+            $client = $this->clientService->createClient([
+                'first_name' => $data['first_name'] ?? $prospect->first_name,
+                'last_name'  => $data['last_name'] ?? $prospect->last_name,
+                'email'      => $data['email'] ?? $prospect->email,
+                'phone'      => $data['phone'] ?? $prospect->phone,
+                'alt_phone'  => $data['alt_phone'] ?? $prospect->alt_phone,
+                'address'    => $data['address'] ?? $prospect->address,
+                'town'       => $data['town'] ?? $prospect->town,
+                'county'     => $data['county'] ?? $prospect->county,
+                'status'     => 'active',
+                'notes'      => $data['notes'] ?? null,
+            ], $userId);
+
+            // 2. Optionally create the initial service account with the plan
+            //    the prospect expressed interest in during the sales pipeline.
+            $account = null;
+            if ($plan) {
+                $username = $data['username']
+                    ?? strtolower(Str::slug($client->first_name . $client->last_name)) . $client->id;
+                $password = $data['password'] ?? Str::random(10);
+
+                $account = ClientAccount::create([
+                    'tenant_id' => $client->tenant_id,
+                    'client_id' => $client->id,
+                    'plan_id'   => $plan->id,
+                    'username'  => $username,
+                    'password'  => $password,
+                    'type'      => 'prepaid',
+                    'status'    => 'pending',
+                    'service_state' => ClientAccount::STATE_PENDING,
+                    'access_method' => match ($prospect->installation_type) {
+                        'fiber'   => ClientAccount::ACCESS_DHCP,
+                        'wireless'=> ClientAccount::ACCESS_PPPOE,
+                        'pppoe'   => ClientAccount::ACCESS_PPPOE,
+                        default   => ClientAccount::ACCESS_PPPOE,
+                    },
+                ]);
+
+                SystemLog::create([
+                    'user_id'  => $userId,
+                    'action'   => 'created client account from prospect conversion',
+                    'model'    => 'ClientAccount',
+                    'model_id' => $account->id,
+                    'new_values' => [
+                        'client_id' => $client->id,
+                        'plan_id'   => $plan->id,
+                        'prospect_id' => $prospect->id,
+                    ],
+                ]);
+            }
+
+            return [$client, $account];
+        });
+
+        // 3. Mark the prospect won — reuses the authoritative marker so lead
+        //    linkage and audit stay in one place.
+        $this->markAsWon($prospect, $client->id, $userId);
+
+        return [
+            'client'  => $client,
+            'account' => $account,
+        ];
+    }
+
+    /**
      * Mark a prospect as lost with a reason.
      */
     public function markAsLost(Prospect $prospect, $reason, $userId)

@@ -5,6 +5,7 @@ namespace App\Services\Client;
 use App\Jobs\ActivateNetworkAccessJob;
 use App\Jobs\SuspendNetworkAccessJob;
 use App\Models\Client;
+use App\Models\ClientAccount;
 use App\Models\SystemLog;
 use Illuminate\Http\Request;
 
@@ -88,11 +89,16 @@ class ClientService
     {
         $client->update(['status' => 'suspended']);
 
-$accounts = $client->accounts()->where('status', 'active')->get();
+        $accounts = $client->accounts()->where('status', 'active')->get();
 
         foreach ($accounts as $account) {
-            $account->update(['status' => 'suspended']);
-            SuspendNetworkAccessJob::dispatch($account->id, $account->tenant_id);
+            // Operator-driven suspension → administrative hold (SL2).
+            SuspendNetworkAccessJob::dispatch(
+                $account->id,
+                $account->tenant_id,
+                ClientAccount::SUSPENSION_ADMIN,
+                'Client suspended by operator'
+            );
         }
 
         SystemLog::create([
@@ -115,8 +121,14 @@ $accounts = $client->accounts()->where('status', 'active')->get();
         $accounts = $client->accounts()->where('status', 'suspended')->get();
 
         foreach ($accounts as $account) {
-            $account->update(['status' => 'active']);
-            ActivateNetworkAccessJob::dispatch($account->id, $account->tenant_id);
+            // Operator-driven activation → explicit administrative restore,
+            // which is the only action allowed to lift an admin hold (SL2).
+            ActivateNetworkAccessJob::dispatch(
+                $account->id,
+                $account->tenant_id,
+                true,
+                'Client activated by operator'
+            );
         }
 
         SystemLog::create([

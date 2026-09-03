@@ -327,9 +327,21 @@ class MpesaService
             return;
         }
 
-        foreach ($client->accounts()->where('status', 'suspended')->get() as $account) {
-            $account->update(['status' => 'active']);
-            ActivateNetworkAccessJob::dispatch($account->id, $client->tenant_id);
+        // Billing reactivation — flows through the lifecycle authority
+        // (never forced), so administratively held services are left alone.
+        $suspendedAccounts = $client->accounts()->where('status', 'suspended')->get();
+
+        if ($suspendedAccounts->isEmpty()) {
+            return;
+        }
+
+        foreach ($suspendedAccounts as $account) {
+            ActivateNetworkAccessJob::dispatch(
+                $account->id,
+                $client->tenant_id,
+                false,
+                'M-Pesa payment received — billing reactivation'
+            );
         }
 
         $client->update(['status' => 'active']);

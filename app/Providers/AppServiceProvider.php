@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\Audit\AuditService;
 use App\Services\Network\AccessMethodManager;
 use App\Services\Network\DhcpAccessService;
+use App\Services\Network\EffectiveRateResolver;
 use App\Services\Network\FupService;
 use App\Services\Network\HotspotAccessService;
 use App\Services\Network\MikroTikRouterAdapter;
@@ -19,6 +20,7 @@ use App\Services\Network\StaticIpAccessService;
 use App\Services\Radius\FreeRadiusAdapter;
 use App\Services\Radius\MockRadiusAdapter;
 use App\Services\Radius\RadiusAdapterInterface;
+use App\Services\Radius\RadiusCoaClient;
 use App\Services\Radius\RadiusControlService;
 use Illuminate\Support\ServiceProvider;
 
@@ -49,28 +51,32 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(PppoeAccessService::class, function ($app) {
             return new PppoeAccessService(
                 $app->make(RouterAdapterInterface::class),
-                $app->make(RadiusAdapterInterface::class)
+                $app->make(RadiusAdapterInterface::class),
+                $app->make(EffectiveRateResolver::class)
             );
         });
 
         $this->app->singleton(HotspotAccessService::class, function ($app) {
             return new HotspotAccessService(
                 $app->make(RouterAdapterInterface::class),
-                $app->make(RadiusAdapterInterface::class)
+                $app->make(RadiusAdapterInterface::class),
+                $app->make(EffectiveRateResolver::class)
             );
         });
 
         $this->app->singleton(StaticIpAccessService::class, function ($app) {
             return new StaticIpAccessService(
                 $app->make(RouterAdapterInterface::class),
-                $app->make(RadiusAdapterInterface::class)
+                $app->make(RadiusAdapterInterface::class),
+                $app->make(EffectiveRateResolver::class)
             );
         });
 
         $this->app->singleton(DhcpAccessService::class, function ($app) {
             return new DhcpAccessService(
                 $app->make(RouterAdapterInterface::class),
-                $app->make(RadiusAdapterInterface::class)
+                $app->make(RadiusAdapterInterface::class),
+                $app->make(EffectiveRateResolver::class)
             );
         });
 
@@ -89,7 +95,8 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(RadiusControlService::class, function ($app) {
             return new RadiusControlService(
-                $app->make(NetworkEventService::class)
+                $app->make(NetworkEventService::class),
+                $app->make(RadiusCoaClient::class)
             );
         });
 
@@ -108,8 +115,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(ServiceLifecycleService::class, function ($app) {
             return new ServiceLifecycleService(
-                $app->make(AccessMethodManager::class),
-                $app->make(RadiusControlService::class)
+                $app->make(AccessMethodManager::class)
             );
         });
 
@@ -117,7 +123,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ProvisioningService::class, function ($app) {
             return new ProvisioningService(
                 $app->make(RouterAdapterInterface::class),
-                $app->make(RadiusAdapterInterface::class)
+                $app->make(RadiusAdapterInterface::class),
+                $app->make(EffectiveRateResolver::class)
             );
         });
     }

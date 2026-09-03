@@ -5,14 +5,20 @@ namespace App\Services\Radius;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use App\Services\Network\EffectiveRateResolver;
 
 class FreeRadiusAdapter implements RadiusAdapterInterface
 {
     protected string $connection;
 
-    public function __construct()
+    protected EffectiveRateResolver $rateResolver;
+
+    public function __construct(?EffectiveRateResolver $rateResolver = null)
     {
-        $this->connection = config('network.radius_connection', 'radius');
+        // Resolver is optional for legacy/manual construction; the container
+        // singleton always injects the real one.
+        $this->rateResolver = $rateResolver ?? app(EffectiveRateResolver::class);
+        $this->connection  = config('network.radius_connection', 'radius');
     }
 
     public function createUser(array $data): bool
@@ -86,7 +92,10 @@ class FreeRadiusAdapter implements RadiusAdapterInterface
                 'username'   => $account->username,
                 'password'   => $account->password,
                 'group'      => $account->plan->name,
-                'rate_limit' => $this->buildRateLimit($account->plan),
+                // Section 23 — never blindly push the base plan rate over an
+                // active FUP throttle. The resolver returns the throttled
+                // rate while the FUP override is in force.
+                'rate_limit' => $this->rateResolver->effectiveRate($account),
             ]);
         }
 
@@ -110,7 +119,8 @@ class FreeRadiusAdapter implements RadiusAdapterInterface
             'username'   => $account->username,
             'password'   => $account->password,
             'group'      => $account->plan->name,
-            'rate_limit' => $this->buildRateLimit($account->plan),
+            // Section 23 — FUP-aware rate resolution (see syncUsers).
+            'rate_limit' => $this->rateResolver->effectiveRate($account),
         ]);
     }
 

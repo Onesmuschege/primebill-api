@@ -60,7 +60,8 @@ class PortalRegisterController extends Controller
                 'username'     => $request->username,
                 'password'     => Hash::make($plainPassword),
                 'type'         => 'prepaid',
-                'status'       => 'active',
+                'status'       => 'pending',
+                'service_state'=> ClientAccount::STATE_PENDING,
                 'expiry_date'  => now()->addDays($plan->validity_days ?? 30),
                 'activated_at' => now(),
             ]);

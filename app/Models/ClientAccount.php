@@ -17,8 +17,12 @@ class ClientAccount extends Model
         // Network Core — Phase A
         'access_method', 'nas_id', 'service_state',
         'provisioned_at', 'suspended_at', 'restored_at', 'terminated_at',
+        // DEPRECATED: never written by production code. Kept for schema
+        // compatibility only — entitlement truth is computed, see isEntitled().
         'entitled_until', 'is_entitled', 'rate_limit_policy',
         'service_profile_id',
+        // Lifecycle — suspension ownership (SL2)
+        'suspension_type', 'suspended_by',
     ];
 
     protected $casts = [
@@ -30,6 +34,7 @@ class ClientAccount extends Model
         'terminated_at'  => 'datetime',
         'entitled_until' => 'datetime',
         'is_entitled'    => 'boolean',
+        'suspended_by'   => 'integer',
     ];
 
     public function client()
@@ -94,6 +99,10 @@ public function radiusSessions()
     public const STATE_SUSPENDED    = 'SUSPENDED';
     public const STATE_TERMINATED   = 'TERMINATED';
 
+    // Suspension ownership (SL2) — why a service is suspended.
+    public const SUSPENSION_BILLING = 'billing';
+    public const SUSPENSION_ADMIN   = 'admin';
+
     public const ACCESS_PPPOE   = 'pppoe';
     public const ACCESS_HOTSPOT = 'hotspot';
     public const ACCESS_STATIC  = 'static_ip';
@@ -109,9 +118,31 @@ public function radiusSessions()
         return $this->service_state === self::STATE_SUSPENDED;
     }
 
+    /**
+     * SL2 — whether this service is under an explicit administrative hold.
+     * Billing reconciliation must never auto-restore such a service.
+     */
+    public function hasAdministrativeHold(): bool
+    {
+        return $this->service_state === self::STATE_SUSPENDED
+            && $this->suspension_type === self::SUSPENSION_ADMIN;
+    }
+
+    /**
+     * Truthful entitlement: the service is active AND the owning client is
+     * currently entitled (active client profile, no overdue debt).
+     *
+     * Note: the persisted `is_entitled` column is deprecated dead
+     * infrastructure (it has no production writers) and is deliberately
+     * ignored here so API responses never report fabricated values.
+     */
     public function isEntitled(): bool
     {
-        return $this->is_entitled && $this->service_state === self::STATE_ACTIVE;
+        if ($this->service_state !== self::STATE_ACTIVE) {
+            return false;
+        }
+
+        return app(\App\Services\Network\ServiceLifecycleService::class)->isEntitled($this);
     }
 
     public function transitionTo(string $newState, ?string $reason = null): bool
@@ -128,13 +159,22 @@ public function radiusSessions()
 
         $now = now();
 
-        match ($newState) {
-            self::STATE_PROVISIONING => $this->provisioned_at = $now,
-            self::STATE_ACTIVE       => $this->restored_at = $now,
-            self::STATE_SUSPENDED    => $this->suspended_at = $now,
-            self::STATE_TERMINATED   => $this->terminated_at = $now,
-            default                  => null,
-        };
+        // Compatibility synchronization (Track A): `status` is a legacy
+        // column that must never silently diverge from `service_state`.
+        if ($newState === self::STATE_ACTIVE) {
+            $this->restored_at = $now;
+            $this->status = 'active';
+            $this->suspension_type = null;
+            $this->suspended_by = null;
+        } elseif ($newState === self::STATE_SUSPENDED) {
+            $this->suspended_at = $now;
+            $this->status = 'suspended';
+        } elseif ($newState === self::STATE_PROVISIONING) {
+            $this->provisioned_at = $now;
+        } elseif ($newState === self::STATE_TERMINATED) {
+            $this->terminated_at = $now;
+            $this->status = 'inactive';
+        }
 
         $this->save();
 

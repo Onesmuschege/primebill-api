@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Models\SystemLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class PaymentService
@@ -168,10 +169,7 @@ class PaymentService
 
     private function extendClientAccount(int $clientId, Invoice $invoice): void
     {
-        $account = ClientAccount::where('client_id', $clientId)
-            ->where('status', '!=', 'inactive')
-            ->with('plan')
-            ->first();
+        $account = $this->resolveAccountForInvoice($invoice, $clientId);
 
         if (!$account || !$account->plan) return;
 
@@ -182,12 +180,50 @@ class PaymentService
             ? now()->addDays($validityDays)
             : $currentExpiry->copy()->addDays($validityDays);
 
-        $account->update([
-            'status'      => 'active',
-            'expiry_date' => $newExpiry,
+        // Payment-driven reactivation flows through the lifecycle authority
+        // (never forced) so administratively held services are not restored
+        // and `status`/`service_state` stay in lockstep (SL2).
+        $account->update(['expiry_date' => $newExpiry]);
+
+        Log::info('PaymentService: service extended by payment', [
+            'payment_invoice_id' => $invoice->id,
+            'client_id'          => $clientId,
+            'client_account_id'  => $account->id,
+            'new_expiry'         => $newExpiry->toDateTimeString(),
         ]);
 
-        ActivateNetworkAccessJob::dispatch($account->id, $account->tenant_id);
+        ActivateNetworkAccessJob::dispatch(
+            $account->id,
+            $account->tenant_id,
+            false,
+            'Payment received — billing reactivation'
+        );
+    }
+
+    /**
+     * Resolve the exact service that owns an invoice (Commercial Transaction
+     * Identity — Section 9).
+     *
+     * The invoice must name the service. Payments allocated to a multi-service
+     * customer must extend exactly that service, never "the first account".
+     *
+     * Only invoices that predate service linking fall back to the client's
+     * first usable connection — and the returned account is still scoped to
+     * the invoice's client so a cross-tenant leak is impossible.
+     */
+    private function resolveAccountForInvoice(Invoice $invoice, int $clientId): ?ClientAccount
+    {
+        if ($invoice->client_account_id) {
+            return ClientAccount::with('plan')
+                ->where('id', $invoice->client_account_id)
+                ->where('client_id', $clientId)
+                ->first();
+        }
+
+        return ClientAccount::with('plan')
+            ->where('client_id', $clientId)
+            ->where('status', '!=', 'inactive')
+            ->first();
     }
 
     /**

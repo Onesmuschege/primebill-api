@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Router\StoreRouterRequest;
 use App\Http\Requests\Router\UpdateRouterRequest;
 use App\Models\Router;
+use App\Services\Network\RouterHealthService;
 use App\Services\Network\RouterService;
 use Illuminate\Http\Request;
 
@@ -113,6 +114,24 @@ class RouterController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $sessions,
+        ]);
+    }
+
+    // GET /api/routers/{id}/health — live reachability probe (Sections 43/44).
+    public function health(Router $router, RouterHealthService $health)
+    {
+        return response()->json([
+            'success' => true,
+            'data'    => $health->check($router),
+        ]);
+    }
+
+    // GET /api/routers/health — probe every router in the tenant.
+    public function healthAll(RouterHealthService $health)
+    {
+        return response()->json([
+            'success' => true,
+            'data'    => $health->checkAll(),
         ]);
     }
 }
