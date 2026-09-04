@@ -7,7 +7,10 @@ use App\Models\User;
 use App\Models\Client;
 use App\Models\Payment;
 use App\Models\Invoice;
+use App\Models\PlatformInvoice;
+use App\Models\TenantSubscription;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class PlatformAdminTest extends TestCase
@@ -24,6 +27,11 @@ class PlatformAdminTest extends TestCase
         $this->platformAdmin = User::factory()->create([
             'is_platform_admin' => true,
         ]);
+
+        // RefreshDatabase keeps one app instance across test methods, so the
+        // array cache persists too — stats payloads (platform:stats:v2) leak
+        // between tests. Flush so every stats test sees a fresh snapshot.
+        Cache::flush();
     }
 
     public function test_platform_admin_can_view_stats(): void
@@ -602,5 +610,108 @@ class PlatformAdminTest extends TestCase
             'action' => 'tenant.impersonated',
             'new_values->mode' => 'view',
         ]);
+    }
+// ─── Overview / Command Centre queue tests (Phase 3) ────────────────────
+
+    public function test_platform_stats_include_op_queues(): void
+    {
+        // A tenant on trial expiring within 3 days → must surface.
+        $trialTenant = Tenant::factory()->create([
+            'status' => 'trial',
+            'trial_ends_at' => now()->addDays(3),
+        ]);
+        // A tenant on trial expiring in 30 days → must NOT surface.
+        Tenant::factory()->create([
+            'status' => 'trial',
+            'trial_ends_at' => now()->addDays(30),
+        ]);
+
+        // An overdue PrimeBill invoice → must surface as an account owing.
+        $overdueTenant = Tenant::factory()->create();
+        PlatformInvoice::create([
+            'tenant_id' => $overdueTenant->id,
+            'invoice_number' => 'PB-2024-TEST',
+            'amount' => 100,
+            'tax_amount' => 16,
+            'total' => 116,
+            'status' => 'overdue',
+            'billing_period' => now()->format('Y-m'),
+            'issue_date' => now()->subDays(30),
+            'due_date' => now()->subDays(5),
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/stats');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'ops_queues' => [
+                        'expiring_trials' => ['available', 'label', 'count', 'items'],
+                        'overdue_accounts' => ['available', 'label', 'count', 'items'],
+                        'near_limit' => ['available', 'label', 'count', 'items'],
+                        'failed_jobs' => ['available', 'label', 'count', 'items'],
+                        'security_events' => ['available', 'label', 'count', 'items'],
+                        'failed_integrations' => ['available', 'label', 'count', 'items'],
+                        'incidents' => ['available', 'label', 'count', 'items'],
+                    ],
+                ],
+            ])
+            ->assertJsonPath('data.ops_queues.expiring_trials.count', 1)
+            ->assertJsonPath('data.ops_queues.expiring_trials.items.0.tenant_id', $trialTenant->id);
+
+        // timing-tolerant: Carbon's diffInDays can round down 3 → 2 during
+        // the test window, so assert a sane range instead of an exact int.
+        $trialItem = $response->json('data.ops_queues.expiring_trials.items.0');
+        $this->assertGreaterThanOrEqual(0, $trialItem['days_left']);
+        $this->assertLessThanOrEqual(3, $trialItem['days_left']);
+
+        $response->assertJsonPath('data.ops_queues.overdue_accounts.count', 1)
+            ->assertJsonPath('data.ops_queues.overdue_accounts.items.0.tenant_id', $overdueTenant->id)
+            // Honest backend-gap queues — available:false, not fabricated counts.
+            ->assertJsonPath('data.ops_queues.failed_integrations.available', false)
+            ->assertJsonPath('data.ops_queues.incidents.available', false);
+    }
+
+    public function test_platform_stats_include_mrr_bridge(): void
+    {
+        $tenant = Tenant::factory()->create();
+
+        // Active subscription started this month → contributes to new MRR.
+        TenantSubscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'status' => 'active',
+            'billing_cycle' => 'monthly',
+            'price' => 100,
+            'starts_at' => now()->startOfMonth()->addDay(),
+        ]);
+
+        // Cancelled this month → counts as churned MRR.
+        TenantSubscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'status' => 'cancelled',
+            'billing_cycle' => 'monthly',
+            'price' => 40,
+            'cancelled_at' => now()->startOfMonth()->addDay(),
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/stats');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'overview' => [
+                        'mrr',
+                        'arr',
+                        'mrr_new_this_month',
+                        'mrr_churned_this_month',
+                    ],
+                ],
+            ])
+            ->assertJsonPath('data.overview.mrr_new_this_month', 100)
+            ->assertJsonPath('data.overview.mrr_churned_this_month', 40);
     }
 }

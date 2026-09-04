@@ -35,6 +35,7 @@ class PlatformAdminService
                 'security' => $this->getSecurityStats(),
                 'activity' => $this->getRecentActivity(),
                 'billing' => $this->getBillingStats(),
+                'ops_queues' => $this->getOpsQueues(),
             ];
         });
     }
@@ -78,6 +79,24 @@ class PlatformAdminService
             ->sum('price') / 12;
         $mrr = $monthlyMrr + $annualAmortized;
 
+        // Revenue bridge (§16): what subscription revenue entered / left this
+        // month. Real data from starts_at / cancelled_at / suspended_at — no
+        // fabricated "previous month" number (no subscription price history
+        // table exists yet, so an exact MoM MRR delta is a documented gap).
+        $mrrNewThisMonth = TenantSubscription::where('status', 'active')
+            ->where('starts_at', '>=', now()->startOfMonth())
+            ->get()
+            ->sum(fn (TenantSubscription $s) => $s->billing_cycle === 'annual' ? (float) $s->price / 12 : (float) $s->price);
+
+        $mrrChurnedThisMonth = TenantSubscription::where(function ($q) {
+            $q->where('status', 'cancelled')->whereNotNull('cancelled_at')
+                ->where('cancelled_at', '>=', now()->startOfMonth());
+            $q->orWhere('status', 'suspended')->whereNotNull('suspended_at')
+                ->where('suspended_at', '>=', now()->startOfMonth());
+        })
+            ->get()
+            ->sum(fn (TenantSubscription $s) => $s->billing_cycle === 'annual' ? (float) $s->price / 12 : (float) $s->price);
+
         return [
             'total_tenants' => Tenant::count(),
             'active_tenants' => (int) ($tenantCounts['active'] ?? 0),
@@ -89,6 +108,8 @@ class PlatformAdminService
             'total_revenue' => (float) $totalRevenue,
             'mrr' => (float) $mrr,
             'arr' => (float) $mrr * 12,
+            'mrr_new_this_month' => (float) $mrrNewThisMonth,
+            'mrr_churned_this_month' => (float) $mrrChurnedThisMonth,
             'outstanding_invoices' => (float) $outstandingInvoices,
             'total_payments' => $totalPayments,
             'avg_revenue_per_tenant' => $totalClients > 0 ? (float) ($totalRevenue / Tenant::count()) : 0,
@@ -376,9 +397,170 @@ class PlatformAdminService
     }
 
     /**
+     * Operational attention queues for the platform command center (§8 Layer 6).
+     *
+     * Only REAL, backend-derived conditions appear here. Queues the platform
+     * cannot yet measure across tenants (failed integrations, incidents) are
+     * marked `available: false` rather than fabricating a count — the frontend
+     * shows an honest "backend gap" empty state for those.
+     */
+    public function getOpsQueues(): array
+    {
+        // Expiring trials — tenants still on 'trial' whose trial window ends
+        // within 7 days (or already passed without conversion).
+        $expiringTrials = Tenant::where('status', 'trial')
+            ->where('trial_ends_at', '<=', now()->addDays(7))
+            ->orderBy('trial_ends_at')
+            ->limit(5)
+            ->get()
+            ->map(fn (Tenant $t) => [
+                'tenant_id' => $t->id,
+                'name' => $t->name,
+                'slug' => $t->slug,
+                'days_left' => $t->trial_ends_at ? now()->diffInDays($t->trial_ends_at, false) : null,
+            ])
+            ->values()
+            ->toArray();
+
+        // Overdue PrimeBill invoices, grouped by tenant (who owes PrimeBill).
+        $overdueAccounts = DB::table('platform_invoices as pi')
+            ->join('tenants as t', 't.id', '=', 'pi.tenant_id')
+            ->where('pi.status', 'overdue')
+            ->groupBy('t.id', 't.name', 't.slug')
+            ->selectRaw('t.id as tenant_id, t.name, t.slug, COUNT(*) as invoice_count, SUM(pi.total) as total')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get()
+            ->map(fn ($r) => [
+                'tenant_id' => (int) $r->tenant_id,
+                'name' => $r->name,
+                'slug' => $r->slug,
+                'invoice_count' => (int) $r->invoice_count,
+                'total' => (float) $r->total,
+            ])
+            ->values()
+            ->toArray();
+
+        // Tenants at or above 90% of any soft quota (clients / API / storage).
+        $nearClient = DB::table('tenants as t')
+            ->leftJoin('clients as c', 'c.tenant_id', '=', 't.id')
+            ->where('t.max_clients', '>', 0)
+            ->whereNull('c.deleted_at')
+            ->selectRaw('t.id as tenant_id, t.name, t.slug, "clients" as metric, COUNT(c.id) as used, t.max_clients as limit_value')
+            ->groupBy('t.id', 't.name', 't.slug', 't.max_clients')
+            ->havingRaw('(COUNT(c.id) * 1.0) / t.max_clients >= 0.9')
+            ->orderByRaw('(COUNT(c.id) * 1.0) / t.max_clients DESC')
+            ->limit(3)
+            ->get();
+
+        $nearApi = DB::table('tenants as t')
+            ->where('api_calls_per_month', '>', 0)
+            ->whereRaw('(api_calls_used * 1.0) / api_calls_per_month >= 0.9')
+            ->selectRaw('t.id as tenant_id, t.name, t.slug, "api" as metric, t.api_calls_used as used, t.api_calls_per_month as limit_value')
+            ->orderByRaw('(api_calls_used * 1.0) / api_calls_per_month DESC')
+            ->limit(3)
+            ->get();
+
+        $nearStorage = DB::table('tenants as t')
+            ->where('storage_quota_gb', '>', 0)
+            ->whereRaw('(storage_used_mb * 1.0) / (storage_quota_gb * 1024) >= 0.9')
+            ->selectRaw('t.id as tenant_id, t.name, t.slug, "storage" as metric, t.storage_used_mb as used, t.storage_quota_gb as limit_value')
+            ->orderByRaw('(storage_used_mb * 1.0) / (storage_quota_gb * 1024) DESC')
+            ->limit(3)
+            ->get();
+
+        $nearLimit = collect(array_merge($nearClient->toArray(), $nearApi->toArray(), $nearStorage->toArray()))
+            ->map(fn ($r) => [
+                'tenant_id' => (int) $r->tenant_id,
+                'name' => $r->name,
+                'slug' => $r->slug,
+                'metric' => $r->metric,
+                'used' => (float) $r->used,
+                'limit_value' => (float) $r->limit_value,
+                'ratio' => round(((float) $r->used / max(1, (float) $r->limit_value)) * 100, 1),
+            ])
+            ->sortByDesc('ratio')
+            ->unique('tenant_id')
+            ->take(5)
+            ->values()
+            ->toArray();
+
+        // Failed background jobs — Laravel's own queue failure ledger.
+        try {
+            $failedJobsCount = (int) DB::table('failed_jobs')->count();
+        } catch (\Throwable) {
+            $failedJobsCount = 0;
+        }
+
+        $securityEvents = SystemLog::where('action', 'like', 'security.%')
+            ->where('created_at', '>=', now()->subDays(7))
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get()
+            ->map(fn ($log) => [
+                'id' => $log->id,
+                'action' => $log->action,
+                'tenant_id' => $log->tenant_id,
+                'created_at' => $log->created_at->toISOString(),
+            ])
+            ->values()
+            ->toArray();
+
+        return [
+            'expiring_trials' => [
+                'available' => true,
+                'label' => 'Expiring trials',
+                'count' => count($expiringTrials),
+                'items' => $expiringTrials,
+            ],
+            'overdue_accounts' => [
+                'available' => true,
+                'label' => 'Tenants owing PrimeBill',
+                'count' => count($overdueAccounts),
+                'items' => $overdueAccounts,
+            ],
+            'near_limit' => [
+                'available' => true,
+                'label' => 'Tenants near limits',
+                'count' => count($nearLimit),
+                'items' => $nearLimit,
+            ],
+            'failed_jobs' => [
+                'available' => true,
+                'label' => 'Failed jobs',
+                'count' => $failedJobsCount,
+                'items' => [],
+            ],
+            'security_events' => [
+                'available' => true,
+                'label' => 'Security events (7d)',
+                'count' => (int) SystemLog::where('action', 'like', 'security.%')
+                    ->where('created_at', '>=', now()->subDays(7))
+                    ->count(),
+                'items' => $securityEvents,
+            ],
+            // Backend gaps — no platform-wide integration registry or incident
+            // feed exists yet (both are tenant-scoped today). Surfaced honestly.
+            'failed_integrations' => [
+                'available' => false,
+                'label' => 'Failed integrations',
+                'count' => 0,
+                'items' => [],
+            ],
+            'incidents' => [
+                'available' => false,
+                'label' => 'Unresolved incidents',
+                'count' => 0,
+                'items' => [],
+            ],
+        ];
+    }
+
+    /**
      * Get tenant list with detailed metrics (legacy: full array, client-side
      * enrichment of every tenant). Kept for consumers that need the complete
-     * enriched list (PlatformSystemHealth, etc.).
+     * enriched list (PlatformSystemHealth, etc.). New code should prefer
+     * getTenantsPaginated().
      */
     public function getTenants(?string $status = null, ?string $search = null): array
     {
