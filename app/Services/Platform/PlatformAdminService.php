@@ -376,7 +376,9 @@ class PlatformAdminService
     }
 
     /**
-     * Get tenant list with detailed metrics
+     * Get tenant list with detailed metrics (legacy: full array, client-side
+     * enrichment of every tenant). Kept for consumers that need the complete
+     * enriched list (PlatformSystemHealth, etc.).
      */
     public function getTenants(?string $status = null, ?string $search = null): array
     {
@@ -394,41 +396,110 @@ class PlatformAdminService
         }
 
         return $query->get()
-            ->map(function (Tenant $tenant) {
-                $clientCount = Client::withoutTenantScope()
-                    ->where('tenant_id', $tenant->id)
-                    ->count();
-
-                $revenue = Payment::withoutTenantScope()
-                    ->where('tenant_id', $tenant->id)
-                    ->where('status', 'completed')
-                    ->sum('amount');
-
-                $outstanding = Invoice::withoutTenantScope()
-                    ->where('tenant_id', $tenant->id)
-                    ->whereIn('status', ['pending', 'overdue'])
-                    ->sum('total');
-
-                return [
-                    'id' => $tenant->id,
-                    'name' => $tenant->name,
-                    'slug' => $tenant->slug,
-                    'status' => $tenant->status,
-                    'plan' => $tenant->plan,
-                    'billing_cycle' => $tenant->billing_cycle,
-                    'currency' => $tenant->currency,
-                    'timezone' => $tenant->timezone,
-                    'contact_email' => $tenant->contact_email,
-                    'client_count' => $clientCount,
-                    'max_clients' => $tenant->max_clients,
-                    'revenue' => (float) $revenue,
-                    'outstanding_invoices' => (float) $outstanding,
-                    'created_at' => $tenant->created_at->toISOString(),
-                    'plan_expires_at' => $tenant->plan_expires_at?->toISOString(),
-                    'trial_ends_at' => $tenant->trial_ends_at?->toISOString(),
-                ];
-            })
+            ->map(fn (Tenant $tenant) => $this->enrichTenant($tenant))
             ->toArray();
+    }
+
+    /**
+     * Get tenant list with server-side pagination, filtering, and sorting.
+     *
+     * Unlike getTenants() which loads and enriches every tenant, this method
+     * filters/sorts at the database level and enriches only the current page's
+     * tenants — scaling to thousands of tenants without pulling every tenant's
+     * metrics into memory.
+     *
+     * Return shape matches Laravel's paginate() output so the controller can
+     * return it directly:
+     *   { data: [...], total, current_page, per_page, last_page, from, to }
+     */
+    public function getTenantsPaginated(
+        ?string $status = null,
+        ?string $search = null,
+        int $perPage = 20,
+        int $page = 1,
+        string $sort = 'created_at',
+        string $direction = 'desc',
+    ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
+        $query = Tenant::query()
+            ->withCount('clients');
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%");
+            });
+        }
+
+        // Map sort fields to DB expressions. client_count uses the withCount
+        // alias; mrr uses monthly_price as a proxy for subscription revenue.
+        $sortable = [
+            'name' => 'name',
+            'status' => 'status',
+            'plan' => 'plan',
+            'created_at' => 'created_at',
+            'client_count' => 'clients_count',
+            'mrr' => 'monthly_price',
+        ];
+
+        $sortColumn = $sortable[$sort] ?? 'created_at';
+        $direction = in_array($direction, ['asc', 'desc']) ? $direction : 'desc';
+
+        $query->orderBy($sortColumn, $direction);
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        // Enrich only the current page's tenants (not the full collection).
+        $paginator->getCollection()->transform(function (Tenant $tenant) {
+            return $this->enrichTenant($tenant);
+        });
+
+        return $paginator;
+    }
+
+    /**
+     * Enrich a tenant with computed metrics (client count, revenue, outstanding).
+     * Shared by getTenants() and getTenantsPaginated().
+     */
+    private function enrichTenant(Tenant $tenant): array
+    {
+        // clients_count is available when the query used withCount('clients');
+        // fall back to an explicit count for callers that didn't.
+        $clientCount = $tenant->clients_count ?? Client::withoutTenantScope()
+            ->where('tenant_id', $tenant->id)
+            ->count();
+
+        $revenue = Payment::withoutTenantScope()
+            ->where('tenant_id', $tenant->id)
+            ->where('status', 'completed')
+            ->sum('amount');
+
+        $outstanding = Invoice::withoutTenantScope()
+            ->where('tenant_id', $tenant->id)
+            ->whereIn('status', ['pending', 'overdue'])
+            ->sum('total');
+
+        return [
+            'id' => $tenant->id,
+            'name' => $tenant->name,
+            'slug' => $tenant->slug,
+            'status' => $tenant->status,
+            'plan' => $tenant->plan,
+            'billing_cycle' => $tenant->billing_cycle,
+            'currency' => $tenant->currency,
+            'timezone' => $tenant->timezone,
+            'contact_email' => $tenant->contact_email,
+            'client_count' => (int) $clientCount,
+            'max_clients' => $tenant->max_clients,
+            'revenue' => (float) $revenue,
+            'outstanding_invoices' => (float) $outstanding,
+            'created_at' => $tenant->created_at->toISOString(),
+            'plan_expires_at' => $tenant->plan_expires_at?->toISOString(),
+            'trial_ends_at' => $tenant->trial_ends_at?->toISOString(),
+        ];
     }
 
     /**

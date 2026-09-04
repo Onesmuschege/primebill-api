@@ -578,9 +578,12 @@ class TenantLifecycleService
     }
 
     /**
-     * Impersonate tenant admin securely
+     * Impersonate tenant admin securely.
+     *
+     * @param string $reason Required audit-trail reason (why this impersonation).
+     * @param string $mode   'view' (read-only UI inspection) or 'act' (full tenant-admin authority).
      */
-    public function impersonate(Tenant $tenant, ?Request $request = null): array
+    public function impersonate(Tenant $tenant, ?Request $request = null, ?string $reason = null, string $mode = 'act'): array
     {
         // Find the admin user for this tenant
         $admin = $tenant->users()->role('admin')->first();
@@ -592,19 +595,25 @@ class TenantLifecycleService
         // Generate impersonation token
         $impersonationToken = Str::random(64);
 
-        // Store impersonation session
-        $request?->session()->put('impersonating_tenant', $tenant->id);
-        $request?->session()->put('original_user_id', $request?->user()?->id);
-        $request?->session()->put('impersonation_token', $impersonationToken);
+        // Store impersonation context. Requests may be stateless (the SPA uses
+        // Bearer tokens, and feature tests have no session store), so the session
+        // record is best-effort server-side context — never required.
+        if ($request?->hasSession()) {
+            $request->session()->put('impersonating_tenant', $tenant->id);
+            $request->session()->put('original_user_id', $request->user()?->id);
+            $request->session()->put('impersonation_token', $impersonationToken);
+            $request->session()->put('impersonation_mode', $mode);
+        }
 
-        // Log impersonation
+        // Log impersonation — reason and mode are part of the audit trail so
+        // the security team can later answer "who accessed what, why, and how".
         $this->auditService->log(
             'tenant.impersonated',
             'tenant',
             $tenant->id,
             [],
-            ['admin_email' => $admin->email],
-            ['description' => "Impersonated tenant admin: {$admin->email}"]
+            ['admin_email' => $admin->email, 'reason' => $reason, 'mode' => $mode],
+            ['description' => "Impersonated tenant admin: {$admin->email} [{$mode}]" . ($reason ? " — {$reason}" : '')]
         );
 
         // Create token for the admin
@@ -631,7 +640,9 @@ class TenantLifecycleService
      */
     public function endImpersonation(?Request $request = null): void
     {
-        $tenantId = $request?->session()->get('impersonating_tenant');
+        $tenantId = ($request?->hasSession() ?? false)
+            ? $request->session()->get('impersonating_tenant')
+            : null;
 
         if ($tenantId) {
             $this->auditService->log(
@@ -644,9 +655,12 @@ class TenantLifecycleService
             );
         }
 
-        $request?->session()->forget('impersonating_tenant');
-        $request?->session()->forget('original_user_id');
-        $request?->session()->forget('impersonation_token');
+        if ($request?->hasSession() ?? false) {
+            $request->session()->forget('impersonating_tenant');
+            $request->session()->forget('original_user_id');
+            $request->session()->forget('impersonation_token');
+            $request->session()->forget('impersonation_mode');
+        }
     }
 
     /**

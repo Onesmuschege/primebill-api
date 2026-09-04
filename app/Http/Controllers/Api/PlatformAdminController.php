@@ -77,30 +77,40 @@ class PlatformAdminController extends Controller
         $validated = $request->validate([
             'status' => 'nullable|string|max:32',
             'search' => 'nullable|string|max:255',
-            'per_page' => 'nullable|integer|min:1|max:50',
+            'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'nullable|integer|min:1',
+            'sort' => 'nullable|string|in:name,status,plan,created_at,client_count,mrr',
+            'direction' => 'nullable|string|in:asc,desc',
         ]);
 
+        // Server-side paginated mode: filter/sort at the database level, enrich
+        // only the current page's tenants. This is the full-page /platform/tenants
+        // view — it must scale to thousands of tenants without pulling every
+        // tenant's enriched metrics into memory.
+        if (! empty($validated['per_page'])) {
+            $perPage = (int) $validated['per_page'];
+            $page = max(1, (int) ($validated['page'] ?? 1));
+            $sort = $validated['sort'] ?? 'created_at';
+            $direction = $validated['direction'] ?? 'desc';
+
+            $result = $this->platformService->getTenantsPaginated(
+                status: $validated['status'] ?? null,
+                search: $validated['search'] ?? null,
+                perPage: $perPage,
+                page: $page,
+                sort: $sort,
+                direction: $direction,
+            );
+
+            return $this->success($result);
+        }
+
+        // Legacy full-array mode: kept for existing consumers that need the
+        // complete enriched list (PlatformSystemHealth, etc.).
         $tenants = $this->platformService->getTenants(
             $validated['status'] ?? null,
             $validated['search'] ?? null
         );
-
-        // Opt-in widget mode: slice the enriched list server-side and keep
-        // the real total so dashboards can say "Showing N of TOTAL".
-        if (! empty($validated['per_page'])) {
-            $total = count($tenants);
-            $perPage = (int) $validated['per_page'];
-            $page = max(1, (int) ($validated['page'] ?? 1));
-
-            return $this->success([
-                'data' => array_slice($tenants, ($page - 1) * $perPage, $perPage),
-                'total' => $total,
-                'current_page' => $page,
-                'per_page' => $perPage,
-                'last_page' => (int) ceil($total / $perPage),
-            ]);
-        }
 
         return $this->success($tenants);
     }
@@ -440,11 +450,25 @@ class PlatformAdminController extends Controller
     // ─── Impersonation ───────────────────────────────────────────────────
 
     /**
-     * Impersonate tenant admin
+     * Impersonate tenant admin.
+     *
+     * Requires a reason (audit trail) and supports VIEW AS (read-only tenant
+     * UI inspection) vs ACT AS (full tenant-admin authority) modes. The mode
+     * and reason are logged with the impersonation audit event.
      */
     public function impersonate(Request $request, Tenant $tenant)
     {
-        $result = $this->lifecycleService->impersonate($tenant, $request);
+        $validated = $request->validate([
+            'reason' => 'required|string|min:10|max:500',
+            'mode' => 'nullable|in:view,act',
+        ]);
+
+        $result = $this->lifecycleService->impersonate(
+            $tenant,
+            $request,
+            reason: $validated['reason'] ?? null,
+            mode: $validated['mode'] ?? 'act',
+        );
 
         return $this->success($result, 'Impersonation started');
     }

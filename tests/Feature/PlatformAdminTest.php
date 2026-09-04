@@ -550,4 +550,57 @@ class PlatformAdminTest extends TestCase
             'email' => 'admin@tenant.com',
         ]);
     }
+
+    // ─── Impersonation Tests (F3 — reason required, VIEW AS / ACT AS mode) ──
+
+    public function test_impersonation_requires_audit_reason(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $admin = User::factory()->create(['tenant_id' => $tenant->id]);
+        $admin->assignRole('admin');
+
+        $response = $this->withSession([])
+            ->actingAs($this->platformAdmin)
+            ->postJson("/api/platform/tenants/{$tenant->id}/impersonate", [
+                'mode' => 'act',
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_impersonation_with_reason_and_mode_logs_audit_trail(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $admin = User::factory()->create(['tenant_id' => $tenant->id]);
+        $admin->assignRole('admin');
+
+        $response = $this->withSession([])
+            ->actingAs($this->platformAdmin)
+            ->postJson("/api/platform/tenants/{$tenant->id}/impersonate", [
+                'reason' => 'Investigating ISP support ticket #4321',
+                'mode' => 'view',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'token',
+                    'impersonation_token',
+                    'tenant' => ['id', 'name', 'slug'],
+                    'admin' => ['id', 'name', 'email'],
+                ],
+            ]);
+
+        // The impersonation reason and mode must be in the audit trail.
+        $this->assertDatabaseHas('system_logs', [
+            'action' => 'tenant.impersonated',
+            'model' => 'tenant',
+            'model_id' => $tenant->id,
+            'user_id' => $this->platformAdmin->id,
+        ]);
+        $this->assertDatabaseHas('system_logs', [
+            'action' => 'tenant.impersonated',
+            'new_values->mode' => 'view',
+        ]);
+    }
 }
