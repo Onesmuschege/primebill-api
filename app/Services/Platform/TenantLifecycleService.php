@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Setting;
+use App\Models\SystemLog;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditService;
@@ -537,6 +538,198 @@ class TenantLifecycleService
             'api_limit' => $tenant->api_calls_per_month,
             'api_usage_percent' => $tenant->getApiUsagePercent(),
             'last_activity' => $tenant->last_activity_at?->toISOString(),
+            'score' => $this->getTenantHealthScore($tenant, [
+                'outstanding_invoices' => (float) $outstandingInvoices,
+                'total_revenue' => (float) $totalRevenue,
+                'overdue_invoices' => $tenant->invoices()->where('status', 'overdue')->count(),
+                'client_usage_percent' => $tenant->max_clients > 0
+                    ? round(($clientCount / $tenant->max_clients) * 100, 2) : 0,
+                'user_usage_percent' => $tenant->max_users > 0
+                    ? round(($userCount / $tenant->max_users) * 100, 2) : 0,
+                'router_usage_percent' => $tenant->max_routers > 0
+                    ? round(($routerCount / $tenant->max_routers) * 100, 2) : 0,
+                'storage_usage_percent' => $tenant->getStorageUsagePercent(),
+                'api_usage_percent' => $tenant->getApiUsagePercent(),
+                'router_count' => $routerCount,
+                'online_routers' => $onlineRouters,
+                'last_activity' => $tenant->last_activity_at?->toISOString(),
+            ]),
+        ];
+    }
+
+    /**
+     * Explainable tenant health score.
+     *
+     * Deterministic formula over REAL tenant data — never an opaque "AI
+     * score". Every component reports its score plus human-readable factors
+     * so an operator can see exactly WHY the score is what it is.
+     *
+     * Components and weights: Billing 30%, Usage 25%, Network 20% (skipped
+     * with "insufficient data" when the tenant has no routers), Security
+     * 15%, Activity 10%. total = weighted mean over components that HAVE
+     * data, weights renormalised when a component is excluded.
+     */
+    public function getTenantHealthScore(Tenant $tenant, array $health): array
+    {
+        $components = [];
+
+        // ── Billing ────────────────────────────────────────────────────────
+        $overdue = (int) ($health['overdue_invoices'] ?? 0);
+        $outstanding = (float) ($health['outstanding_invoices'] ?? 0);
+        $paid = (float) ($health['total_revenue'] ?? 0);
+
+        $billingFactors = [];
+        if ($overdue > 0) {
+            $billingFactors[] = "{$overdue} overdue invoice" . ($overdue === 1 ? '' : 's');
+        }
+        if ($outstanding > 0) {
+            $billingFactors[] = 'KSh ' . number_format($outstanding, 0) . ' outstanding';
+        }
+        if ($billingFactors === []) {
+            $billingFactors[] = $paid > 0
+                ? 'No outstanding or overdue invoices'
+                : 'No invoices issued yet (e.g. new or trial account)';
+        }
+        // Deduct up to 50 for overdue volume, up to 35 for outstanding vs paid.
+        $outstandingRatio = $paid > 0 ? $outstanding / $paid : ($outstanding > 0 ? 1 : 0);
+        $billing = max(0, round(100 - min(50, $overdue * 15) - min(35, $outstandingRatio * 35)));
+        $components[] = [
+            'key' => 'billing', 'label' => 'Billing', 'weight' => 30, 'score' => (int) $billing,
+            'factors' => $billingFactors,
+        ];
+
+        // ── Usage ──────────────────────────────────────────────────────────
+        $usageMetrics = [
+            'clients' => (float) ($health['client_usage_percent'] ?? 0),
+            'users' => (float) ($health['user_usage_percent'] ?? 0),
+            'routers' => (float) ($health['router_usage_percent'] ?? 0),
+            'storage' => (float) ($health['storage_usage_percent'] ?? 0),
+            'api' => (float) ($health['api_usage_percent'] ?? 0),
+        ];
+        arsort($usageMetrics);
+        $worstKey = array_key_first($usageMetrics);
+        $worst = (float) $usageMetrics[$worstKey];
+        // Score decays linearly from 100 at ≤70% utilisation to 0 at ≥100%.
+        $usage = (int) round(max(0, min(100, (100 - max(0, $worst - 70)) * (100 / 30))));
+        $usageFactors = [];
+        if ($worst >= 90) {
+            $usageFactors[] = ucfirst($worstKey) . " at {$worst}% of limit (critical)";
+        } elseif ($worst >= 70) {
+            $usageFactors[] = ucfirst($worstKey) . " at {$worst}% of limit (approaching)";
+        } else {
+            $usageFactors[] = 'All resources below 70% of limits';
+        }
+        $components[] = [
+            'key' => 'usage', 'label' => 'Usage', 'weight' => 25, 'score' => $usage,
+            'factors' => $usageFactors,
+        ];
+
+        // ── Network ────────────────────────────────────────────────────────
+        // Skipped entirely when the tenant has no routers — there is nothing
+        // to score, and penalising a router-less tenant would be wrong. The
+        // weight is renormalised across the remaining components.
+        if ((int) $health['router_count'] === 0) {
+            $components[] = [
+                'key' => 'network', 'label' => 'Network', 'weight' => 20, 'score' => null,
+                'skipped' => true, 'factors' => ['No routers registered — not scored'],
+            ];
+        } else {
+            $online = (int) $health['online_routers'];
+            $total = (int) $health['router_count'];
+            $onlineRatio = $total > 0 ? $online / $total : 0;
+            $network = (int) round($onlineRatio * 100);
+            $offline = $total - $online;
+            $networkFactors = [];
+            if ($offline > 0) {
+                $networkFactors[] = "{$offline} of {$total} routers offline";
+            } else {
+                $networkFactors[] = "All {$total} routers online";
+            }
+            $components[] = [
+                'key' => 'network', 'label' => 'Network', 'weight' => 20, 'score' => $network,
+                'factors' => $networkFactors,
+            ];
+        }
+
+        // ── Security ───────────────────────────────────────────────────────
+        // Real signal: security-classified SystemLog entries in the last 30
+        // days. Absent events = full score; each event deducts, weighted by
+        // severity recorded in the log entry.
+        $securityEvents = SystemLog::withoutTenantScope()
+            ->where('tenant_id', $tenant->id)
+            ->where('action', 'like', 'security.%')
+            ->where('created_at', '>=', now()->subDays(30))
+            ->get(['action']);
+        $securityDeduction = 0;
+        $securityFactors = [];
+        foreach ($securityEvents as $event) {
+            $type = (string) $event->action;
+            // Weight deduction by severity class embedded in the event type.
+            if (str_contains($type, 'critical') || str_contains($type, 'breach')) {
+                $securityDeduction += 40;
+                $securityFactors[] = "Critical security event: {$type}";
+            } elseif (str_contains($type, 'warning') || str_contains($type, 'suspicious')) {
+                $securityDeduction += 15;
+                $securityFactors[] = "Suspicious activity: {$type}";
+            } else {
+                $securityDeduction += 5;
+                $securityFactors[] = "Minor security event: {$type}";
+            }
+        }
+        $securityDeduction = min(100, $securityDeduction);
+        $security = 100 - $securityDeduction;
+        if ($securityFactors === []) {
+            $securityFactors[] = 'No security events in the last 30 days';
+        }
+        $components[] = [
+            'key' => 'security', 'label' => 'Security', 'weight' => 15, 'score' => $security,
+            'factors' => array_slice($securityFactors, 0, 5),
+        ];
+
+        // ── Activity ───────────────────────────────────────────────────────
+        $lastActivity = $tenant->last_activity_at;
+        $activity = 100;
+        $activityFactors = [];
+        if (!$lastActivity) {
+            $activity = 50;
+            $activityFactors[] = 'No activity recorded';
+        } else {
+            $daysIdle = (int) floor($lastActivity->diffInDays(now()));
+            if ($daysIdle >= 30) {
+                $activity = 20;
+                $activityFactors[] = "No activity for {$daysIdle} days";
+            } elseif ($daysIdle >= 14) {
+                $activity = 55;
+                $activityFactors[] = "Last activity {$daysIdle} days ago";
+            } elseif ($daysIdle >= 7) {
+                $activity = 80;
+                $activityFactors[] = "Last activity {$daysIdle} days ago";
+            } else {
+                $activityFactors[] = $daysIdle === 0
+                    ? 'Active today'
+                    : "Active within the last {$daysIdle} day" . ($daysIdle === 1 ? '' : 's');
+            }
+        }
+        $components[] = [
+            'key' => 'activity', 'label' => 'Activity', 'weight' => 10, 'score' => $activity,
+            'factors' => $activityFactors,
+        ];
+
+        // ── Total: weighted mean over components that HAVE a score ────────
+        $weightSum = 0;
+        $scoreSum = 0;
+        foreach ($components as $component) {
+            if ($component['score'] === null) {
+                continue;
+            }
+            $weightSum += $component['weight'];
+            $scoreSum += $component['weight'] * $component['score'];
+        }
+        $total = $weightSum > 0 ? (int) round($scoreSum / $weightSum) : null;
+
+        return [
+            'total' => $total,
+            'components' => $components,
         ];
     }
 

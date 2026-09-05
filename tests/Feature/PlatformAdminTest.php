@@ -502,6 +502,89 @@ class PlatformAdminTest extends TestCase
             ]);
     }
 
+    public function test_tenant_health_score_is_explainable_and_bounded(): void
+    {
+        // Router-less tenant: the network component must be skipped (not
+        // penalised) and the weight renormalised across the rest.
+        $tenant = Tenant::factory()->create();
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson("/api/platform/tenants/{$tenant->id}/health");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'score' => [
+                        'total',
+                        'components' => [
+                            ['key', 'label', 'weight', 'score', 'factors'],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $score = $response->json('data.score');
+        $this->assertIsInt($score['total']);
+        $this->assertGreaterThanOrEqual(0, $score['total']);
+        $this->assertLessThanOrEqual(100, $score['total']);
+
+        $componentKeys = collect($score['components'])->pluck('key')->all();
+        $this->assertEqualsCanonicalizing(
+            ['billing', 'usage', 'network', 'security', 'activity'],
+            $componentKeys
+        );
+
+        // Every component must carry at least one human-readable factor —
+        // the score must never be unexplained.
+        foreach ($score['components'] as $component) {
+            $this->assertNotEmpty($component['factors'], "Component {$component['key']} has no factors");
+        }
+
+        $network = collect($score['components'])->firstWhere('key', 'network');
+        $this->assertTrue($network['skipped']);
+        $this->assertNull($network['score']);
+    }
+
+    public function test_tenant_health_score_reacts_to_overdue_invoices(): void
+    {
+        $clean = Tenant::factory()->create();
+        $owing = Tenant::factory()->create();
+
+        Invoice::factory()->overdue()->create([
+            'tenant_id' => $owing->id,
+            'invoice_number' => 'INV-HEALTH-TEST-1',
+            'amount' => 1160,
+            'total' => 1160,
+            'due_date' => now()->subDays(10),
+        ]);
+
+        $getScore = fn (Tenant $t) => $this->actingAs($this->platformAdmin)
+            ->getJson("/api/platform/tenants/{$t->id}/health")
+            ->json('data.score');
+
+        $cleanScore = $getScore($clean);
+        $owingScore = $getScore($owing);
+
+        $cleanBilling = collect($cleanScore['components'])->firstWhere('key', 'billing');
+        $owingBilling = collect($owingScore['components'])->firstWhere('key', 'billing');
+
+        $this->assertGreaterThan(
+            $owingBilling['score'],
+            $cleanBilling['score'],
+            'Overdue invoices must lower the billing component score'
+        );
+        $this->assertGreaterThan(
+            $owingScore['total'],
+            $cleanScore['total'],
+            'Overdue invoices must lower the overall health score'
+        );
+        // The owing tenant's factor list must say WHY.
+        $this->assertTrue(
+            collect($owingBilling['factors'])->contains(fn ($f) => str_contains($f, 'overdue')),
+            'Billing factors must mention the overdue invoice'
+        );
+    }
+
     public function test_platform_admin_can_view_tenant_billing(): void
     {
         $tenant = Tenant::factory()->create();
