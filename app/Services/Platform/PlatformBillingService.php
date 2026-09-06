@@ -8,6 +8,7 @@ use App\Models\PlatformInvoiceItem;
 use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Services\Audit\AuditService;
+use App\Services\Platform\PlatformSettingsService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -24,7 +25,12 @@ use InvalidArgumentException;
  */
 class PlatformBillingService
 {
-    public function __construct(protected AuditService $audit) {}
+    public function __construct(
+        protected AuditService $audit,
+        ?PlatformSettingsService $settings = null
+    ) {
+        $this->settings = $settings ?? app(PlatformSettingsService::class);
+    }
 
     /**
      * Generate one platform invoice per active tenant subscription for the
@@ -82,7 +88,7 @@ class PlatformBillingService
                 'status' => 'draft',
                 'billing_period' => $period,
                 'issue_date' => now(),
-                'due_date' => now()->addDays(14),
+                'due_date' => now()->addDays((int) $this->settings->get('payment_terms_days')),
             ]);
 
             PlatformInvoiceItem::create([
@@ -290,17 +296,19 @@ class PlatformBillingService
     }
 
     /**
-     * Monotonic, year-partitioned invoice number: PB-INV-2026-000012.
+     * Monotonic, year-partitioned invoice number: {prefix}-2026-000012.
+     * Prefix comes from platform settings (default 'PB-INV').
      */
     protected function nextInvoiceNumber(): string
     {
         $year = now()->year;
+        $prefix = $this->settings->get('invoice_prefix');
 
-        return DB::transaction(function () use ($year) {
-            $last = PlatformInvoice::where('invoice_number', 'like', "PB-INV-{$year}-%")->max('invoice_number');
+        return DB::transaction(function () use ($year, $prefix) {
+            $last = PlatformInvoice::where('invoice_number', 'like', "{$prefix}-{$year}-%")->max('invoice_number');
             $seq = $last ? (int) substr($last, -6) + 1 : 1;
 
-            return 'PB-INV-'.$year.'-'.str_pad($seq, 6, '0', STR_PAD_LEFT);
+            return $prefix.'-'.$year.'-'.str_pad($seq, 6, '0', STR_PAD_LEFT);
         }, 3);
     }
 

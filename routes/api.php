@@ -50,6 +50,10 @@ use App\Http\Controllers\Api\PlatformAdminController;
 use App\Http\Controllers\Api\PlatformBillingController;
 use App\Http\Controllers\Api\PlatformReportController;
 use App\Http\Controllers\Api\PlatformSubscriptionController;
+use App\Http\Controllers\Api\PlatformAnalyticsController;
+use App\Http\Controllers\Api\PlatformPlanController;
+use App\Http\Controllers\Api\PlatformSecurityController;
+use App\Http\Controllers\Api\PlatformSettingsController;
 use App\Http\Controllers\Api\ProspectController;
 use App\Http\Controllers\Api\RadiusAccountingController;
 use App\Http\Controllers\Api\RadiusAdvancedController;
@@ -768,6 +772,8 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
             Route::post('/{account}/restore', [ServiceNetworkController::class, 'restore'])->middleware('permission:activate clients');
             Route::post('/{account}/disconnect', [ServiceNetworkController::class, 'disconnect'])->middleware('permission:manage network');
             Route::post('/{account}/coa', [ServiceNetworkController::class, 'coa'])->middleware('permission:manage network');
+            Route::get('/{account}/provisioning-status', [ServiceNetworkController::class, 'provisioningStatus']);
+            Route::post('/{account}/provisioning-retry', [ServiceNetworkController::class, 'retryProvisioning'])->middleware('permission:manage network');
         });
     });
 
@@ -974,7 +980,6 @@ Route::middleware(['auth:sanctum', 'tenant', 'auth.harden', 'security.headers', 
 Route::prefix('platform')->middleware(['auth:sanctum', 'platform_admin'])->group(function () {
     // Stats & Plans
     Route::get('/stats', [PlatformAdminController::class, 'stats']);
-    Route::get('/plans', [PlatformAdminController::class, 'plans']);
 
     // Tenant CRUD
     Route::get('/tenants', [PlatformAdminController::class, 'tenants']);
@@ -1031,6 +1036,12 @@ Route::prefix('platform')->middleware(['auth:sanctum', 'platform_admin'])->group
     Route::post('/subscriptions/{subscription}/cancel', [PlatformSubscriptionController::class, 'cancel']);
     Route::post('/subscriptions/{subscription}/renew', [PlatformSubscriptionController::class, 'renew']);
 
+    // Platform Analytics — deepened revenue analytics (replaces the old stub)
+    Route::get('/analytics', [PlatformAnalyticsController::class, 'index']);
+
+    // Platform Plans catalog CRUD (DB-backed, replaces Tenant::PLANS constant)
+    Route::apiResource('/plans', PlatformPlanController::class);
+
     // Platform Billing — PrimeBill's invoices to its tenant ISPs
     Route::prefix('billing')->group(function () {
         Route::get('/invoices', [PlatformBillingController::class, 'index']);
@@ -1043,6 +1054,17 @@ Route::prefix('platform')->middleware(['auth:sanctum', 'platform_admin'])->group
         Route::post('/invoices/{invoice}/mark-paid', [PlatformBillingController::class, 'markPaid']);
         Route::post('/invoices/{invoice}/void', [PlatformBillingController::class, 'void']);
     });
+
+    // Platform Security — cross-tenant security events, suspicious activity
+    Route::prefix('security')->group(function () {
+        Route::get('/events', [PlatformSecurityController::class, 'events']);
+        Route::get('/suspicious', [PlatformSecurityController::class, 'suspicious']);
+        Route::get('/overview', [PlatformSecurityController::class, 'overview']);
+    });
+
+    // Platform Settings — operator-level settings for PrimeBill itself
+    Route::get('/settings', [PlatformSettingsController::class, 'index']);
+    Route::put('/settings', [PlatformSettingsController::class, 'update']);
 
     // Platform Reporting — cross-tenant aggregates (GET-only for v1)
     Route::prefix('reports')->group(function () {

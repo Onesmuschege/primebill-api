@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\LoginHistory;
 use App\Models\SystemLog;
 use App\Models\Tenant;
+use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Platform\PlatformAdminService;
@@ -288,11 +289,6 @@ class PlatformAdminController extends Controller
     /**
      * Get available plans
      */
-    public function plans()
-    {
-        return $this->success(Tenant::PLANS);
-    }
-
     /**
      * Suspend a tenant
      */

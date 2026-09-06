@@ -271,43 +271,136 @@ class PlatformAdminService
     }
 
     /**
-     * Infrastructure health metrics
+     * Infrastructure health metrics.
+     *
+     * Phase 6 (Observability): health signals are now REAL measurements, not
+     * hardcoded claims. Database and cache reachability are probed at request
+     * time; average response time is a measured DB round-trip; router fleet
+     * health comes from real router rows. The only non-headless signal is the
+     * queue worker — sync driver is verifiably in-request, but a queued driver
+     * cannot report a heartbeat without a worker/ping table (documented gap,
+     * surfaced honestly as `unverified` rather than pretending it is up).
      */
     public function getInfrastructureStats(): array
     {
-        // Router stats from all tenants
+        // Router stats from all tenants (real fleet data).
         $routers = DB::table('routers')
             ->selectRaw('status, count(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status')
             ->toArray();
 
-        // Estimate based on typical deployment
         $onlineRouters = (int) ($routers['online'] ?? 0);
         $offlineRouters = (int) ($routers['offline'] ?? 0);
+        $routerTotal = $onlineRouters + $offlineRouters;
+
+        // Real reachability probes.
+        $databaseUp = $this->databaseIsReachable();
+        $cacheUp = $this->cacheIsReachable();
+
+        // Router fleet status — 0 registered routers is `unverified`, not "up".
+        $routerStatus = $routerTotal === 0
+            ? 'unverified'
+            : ($offlineRouters === 0 ? 'up' : ($onlineRouters === 0 ? 'down' : 'degraded'));
+
+        // Queue worker: sync executes in-request (verifiably up); a queued
+        // driver needs a worker heartbeat we don't instrument yet.
+        $queueStatus = config('queue.default') === 'sync' ? 'up' : 'unverified';
 
         return [
+            'status' => $databaseUp && $cacheUp ? 'operational' : 'degraded',
+            'avg_response_time' => $this->measureDatabaseLatencyMs(),
+            'response_time_unit' => 'ms',
+            'services' => [
+                [
+                    'name' => 'Database',
+                    'status' => $databaseUp ? 'up' : 'down',
+                    'detail' => config('database.default'),
+                ],
+                [
+                    'name' => 'Cache',
+                    'status' => $cacheUp ? 'up' : 'down',
+                    'detail' => config('cache.default'),
+                ],
+                [
+                    'name' => 'Queue worker',
+                    'status' => $queueStatus,
+                    'detail' => config('queue.default') === 'sync'
+                        ? 'sync (in-request)'
+                        : 'driver: '.config('queue.default').' · worker heartbeat not instrumented (gap)',
+                ],
+                [
+                    'name' => 'Router fleet',
+                    'status' => $routerStatus,
+                    'detail' => $routerTotal > 0
+                        ? "{$onlineRouters} online / {$offlineRouters} offline"
+                        : 'no routers registered across tenants',
+                ],
+            ],
             'routers' => [
-                'total' => $onlineRouters + $offlineRouters,
+                'total' => $routerTotal,
                 'online' => $onlineRouters,
                 'offline' => $offlineRouters,
-                'health_percentage' => ($onlineRouters + $offlineRouters) > 0
-                    ? round(($onlineRouters / ($onlineRouters + $offlineRouters)) * 100, 1)
+                'health_percentage' => $routerTotal > 0
+                    ? round(($onlineRouters / $routerTotal) * 100, 1)
                     : 100,
             ],
             'cache' => [
                 'driver' => config('cache.default'),
-                'status' => 'healthy', // Would check actual cache health in production
+                'status' => $cacheUp ? 'healthy' : 'down',
             ],
             'queue' => [
                 'default' => config('queue.default'),
-                'status' => 'running',
+                'status' => $queueStatus === 'up' ? 'running' : 'unverified',
             ],
             'database' => [
                 'driver' => config('database.default'),
-                'status' => 'connected',
+                'status' => $databaseUp ? 'connected' : 'disconnected',
             ],
         ];
+    }
+
+    /**
+     * True when the primary database connection answers a probe query.
+     */
+    private function databaseIsReachable(): bool
+    {
+        try {
+            return DB::connection()->getPdo() instanceof \PDO;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * True when the default cache driver answers a read without throwing.
+     */
+    private function cacheIsReachable(): bool
+    {
+        try {
+            Cache::has('platform:health:probe');
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Measured round-trip latency of a real DB probe (milliseconds).
+     * Returns 0.0 when the database is unreachable, never a fabricated value.
+     */
+    private function measureDatabaseLatencyMs(): float
+    {
+        try {
+            $start = microtime(true);
+            DB::select('select 1');
+            $ms = (microtime(true) - $start) * 1000;
+
+            return round(max($ms, 0.1), 1);
+        } catch (\Throwable) {
+            return 0.0;
+        }
     }
 
     /**

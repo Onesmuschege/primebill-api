@@ -59,11 +59,11 @@ class PlatformSubscriptionController extends Controller
             'cancelled_subscriptions' => TenantSubscription::where('status', 'cancelled')->count(),
             // MRR = PrimeBill's recurring revenue from tenants: active monthly
             // prices + active annual prices amortized at 1/12. ARR = MRR × 12.
-            // Kept consistent with PlatformAdminService::getOverviewStats.
-            'mrr' => TenantSubscription::where('status', 'active')
+            // Consistent with PlatformAdminService::getOverviewStats.
+            'mrr' => (float) TenantSubscription::where('status', 'active')
                 ->where('billing_cycle', 'monthly')
                 ->sum('price')
-                + TenantSubscription::where('status', 'active')
+                + (float) TenantSubscription::where('status', 'active')
                     ->where('billing_cycle', 'annual')
                     ->sum('price') / 12,
         ];

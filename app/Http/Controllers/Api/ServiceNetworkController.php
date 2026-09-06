@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProvisionClientAccountJob;
 use App\Models\ClientAccount;
+use App\Models\MikrotikSyncLog;
 use App\Models\RadiusControlLog;
 use App\Models\RadiusSession;
 use App\Services\Network\AccessMethodManager;
@@ -184,6 +186,111 @@ class ServiceNetworkController extends Controller
             'success'            => $result,
             'coa_supported'      => false,
             'requires_reconnect' => true,
+        ]);
+    }
+/**
+     * GET /api/services/{account}/provisioning-status
+     *
+     * Phase 7: provisioning status + retry. Returns the service's real
+     * provisioning posture — structured MikrotikSyncLog audit rows (each with
+     * its idempotency key), the lifecycle state, and whether the account is
+     * eligible for a retry. Nothing here is fabricated; it is the raw audit
+     * trail of the single-authority ProvisioningService.
+     */
+    public function provisioningStatus(int $accountId): JsonResponse
+    {
+        $account = ClientAccount::with('plan')->findOrFail($accountId);
+
+        $logs = MikrotikSyncLog::where('client_account_id', $accountId)
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get()
+            ->map(fn (MikrotikSyncLog $log) => [
+                'id'              => $log->id,
+                'operation'       => $log->operation,
+                'status'          => $log->status,
+                'router_ok'       => $log->router_ok,
+                'radius_ok'       => $log->radius_ok,
+                'failure_reason'  => $log->failure_reason,
+                'attempts'        => (int) $log->attempts,
+                'idempotency_key' => $log->idempotency_key,
+                'log_message'     => $log->log_message,
+                'created_at'      => $log->created_at?->toISOString(),
+            ])
+            ->values()
+            ->toArray();
+
+        $latest = $logs[0] ?? null;
+
+        $lastProvision = MikrotikSyncLog::where('client_account_id', $accountId)
+            ->where('operation', 'provision')
+            ->orderByDesc('created_at')
+            ->first();
+
+        $retryable = in_array($account->service_state, [
+            ClientAccount::STATE_PENDING,
+            ClientAccount::STATE_PROVISIONING,
+        ], true);
+
+        return response()->json([
+            'account' => [
+                'id'             => $account->id,
+                'username'       => $account->username,
+                'service_state'  => $account->service_state,
+                'is_entitled'    => $account->isEntitled(),
+                'provisioned_at' => $account->provisioned_at?->toISOString(),
+                'plan'           => $account->plan?->name,
+            ],
+            'latest_status' => $latest,
+            'last_provision' => $lastProvision ? [
+                'status'          => $lastProvision->status,
+                'idempotency_key' => $lastProvision->idempotency_key,
+                'created_at'      => $lastProvision->created_at?->toISOString(),
+            ] : null,
+            'retryable'    => $retryable,
+            'attempts'     => $lastProvision ? (int) $lastProvision->attempts : 0,
+            'logs'         => $logs,
+        ]);
+    }
+/**
+     * POST /api/services/{account}/provisioning-retry
+     *
+     * Re-enqueue ProvisionClientAccountJob for a stuck service (PENDING /
+     * PROVISIONING). Each manual retry mints a FRESH idempotency key, so the
+     * queue inherits the same duplicate-protection as the original dispatch
+     * while never being short-circuited by an earlier failed attempt's key.
+     */
+    public function retryProvisioning(int $accountId, Request $request): JsonResponse
+    {
+        $account = ClientAccount::findOrFail($accountId);
+
+        if (! in_array($account->service_state, [
+            ClientAccount::STATE_PENDING,
+            ClientAccount::STATE_PROVISIONING,
+        ], true)) {
+            return response()->json([
+                'message'       => "Account is {$account->service_state} — not eligible for a provisioning retry.",
+                'account_id'    => $account->id,
+                'service_state' => $account->service_state,
+            ], 422);
+        }
+
+        $freshKey = 'retry:provision:'.$account->id.':'.now()->format('YmdHis');
+        $tenantId = $account->tenant_id;
+
+        ProvisionClientAccountJob::dispatch(
+            $account->id,
+            $request->input('password', ''),
+            $tenantId,
+            $freshKey
+        );
+
+        return response()->json([
+            'message'         => 'Provisioning retry queued',
+            'account_id'      => $account->id,
+            'service_state'   => $account->service_state,
+            'idempotency_key' => $freshKey,
+            'queued'          => true,
         ]);
     }
 }

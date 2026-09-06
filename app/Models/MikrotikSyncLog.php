@@ -17,6 +17,7 @@ class MikrotikSyncLog extends Model
         'radius_ok',
         'failure_reason',
         'attempts',
+        'idempotency_key',
         'log_message',
     ];
 

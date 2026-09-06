@@ -33,6 +33,20 @@ class AuthController extends Controller
         // present, and RequestGuard does not implement attempt().
         if (!Auth::guard('web')->attempt($request->only('email', 'password'))) {
             $this->loginHistoryService->recordFailedLogin($request->email, $request, 'Invalid credentials');
+
+            // Feed the cross-tenant security console: failed logins are the raw
+            // signal PlatformSecurityController / PlatformAdminService count.
+            // Credential failures carry no user_id (the principal is unknown).
+            SystemLog::create([
+                'user_id'    => null,
+                'action'     => 'auth.login.failed',
+                'model'      => 'User',
+                'model_id'   => null,
+                'old_values' => ['reason' => 'invalid_credentials'],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
             return $this->error('Invalid credentials', null, 401);
         }
 
@@ -48,9 +62,10 @@ class AuthController extends Controller
             // successful login — success is recorded after code verification).
             SystemLog::create([
                 'user_id'    => $user->id,
-                'action'     => 'login.mfa_challenge',
+                'action'     => 'auth.login.mfa_challenge',
                 'model'      => 'User',
                 'model_id'   => $user->id,
+                'old_values' => ['stage' => 'mfa_challenge'],
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
@@ -73,9 +88,10 @@ class AuthController extends Controller
 
         SystemLog::create([
             'user_id'    => $user->id,
-            'action'     => 'login',
+            'action'     => 'auth.login.success',
             'model'      => 'User',
             'model_id'   => $user->id,
+            'old_values' => ['stage' => 'password'],
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
@@ -117,7 +133,7 @@ class AuthController extends Controller
 
         SystemLog::create([
             'user_id'    => $request->user()->id,
-            'action'     => 'logout',
+            'action'     => 'auth.logout',
             'model'      => 'User',
             'model_id'   => $request->user()->id,
             'ip_address' => $request->ip(),

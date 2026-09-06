@@ -355,14 +355,28 @@ class CoreIspOperationsTest extends TestCase
 
         $this->app->instance(RouterAdapterInterface::class, $failAdapter);
 
-        app(ProvisionClientAccountJob::class, [
-            'accountId'     => $account->id,
-            'plainPassword' => 'secret',
-            'tenantId'      => $this->tenant->id,
-        ])->handle(
-            app(\App\Services\Network\ProvisioningService::class),
-            app(ServiceLifecycleService::class)
-        );
+        // Phase 7 contract: a failed provisioning THROWS so the queue retries
+        // with exponential backoff (tries=3). The service must still be left
+        // PENDING — never activated — while the failure audit row stands.
+        $threw = false;
+        try {
+            app(ProvisionClientAccountJob::class, [
+                'accountId'     => $account->id,
+                'plainPassword' => 'secret',
+                'tenantId'      => $this->tenant->id,
+            ])->handle(
+                app(\App\Services\Network\ProvisioningService::class),
+                app(ServiceLifecycleService::class)
+            );
+        } catch (\RuntimeException $e) {
+            $threw = true;
+            $this->assertStringStartsWith(
+                "Provisioning for account {$account->id} (",
+                $e->getMessage()
+            );
+        }
+
+        $this->assertTrue($threw, 'job must throw so the queue retries with backoff');
 
         $account->refresh();
         $this->assertSame('pending', $account->status);

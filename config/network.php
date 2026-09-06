@@ -48,6 +48,13 @@ return [
 
     'provisioning_queue' => env('PROVISIONING_QUEUE', 'default'),
 
+    /* Retry backoff schedule (seconds) for ProvisionClientAccountJob.
+     * The job tries `tries` times, waiting these delays between attempts. */
+    'provisioning_backoff' => array_map(
+        'intval',
+        explode(',', env('PROVISIONING_BACKOFF', '30,120,300'))
+    ),
+
     /*
     |--------------------------------------------------------------------------
     | RADIUS Accounting Webhook Secret

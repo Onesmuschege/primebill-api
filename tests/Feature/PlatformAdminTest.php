@@ -8,7 +8,9 @@ use App\Models\Client;
 use App\Models\Payment;
 use App\Models\Invoice;
 use App\Models\PlatformInvoice;
+use App\Models\SubscriptionPlan;
 use App\Models\TenantSubscription;
+use App\Models\SystemLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -355,17 +357,34 @@ class PlatformAdminTest extends TestCase
 
     public function test_platform_admin_can_view_available_plans(): void
     {
+        // Seed the plan catalog so the DB-backed endpoint has data.
+        $this->seed(\Database\Seeders\SubscriptionPlanSeeder::class);
+
         $response = $this->actingAs($this->platformAdmin)
             ->getJson('/api/platform/plans');
 
         $response->assertStatus(200)
             ->assertJsonStructure([
+                'success',
                 'data' => [
-                    'starter' => ['name', 'monthly_price', 'max_clients'],
-                    'professional' => ['name', 'monthly_price', 'max_clients'],
-                    'enterprise' => ['name', 'monthly_price', 'max_clients'],
+                    [
+                        'id',
+                        'slug',
+                        'name',
+                        'price_monthly',
+                        'annual_price',
+                        'max_clients',
+                        'max_users',
+                        'max_routers',
+                        'features',
+                        'is_active',
+                    ],
                 ],
-            ]);
+            ])
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('data.0.slug', 'starter')
+            ->assertJsonPath('data.1.slug', 'professional')
+            ->assertJsonPath('data.2.slug', 'enterprise');
     }
 
     // ─── Tenant Lifecycle Tests ────────────────────────────────────────────
@@ -796,5 +815,372 @@ class PlatformAdminTest extends TestCase
             ])
             ->assertJsonPath('data.overview.mrr_new_this_month', 100)
             ->assertJsonPath('data.overview.mrr_churned_this_month', 40);
+    }
+
+    // ─── Phase 5: Revenue Analytics ─────────────────────────────────────────
+
+    public function test_platform_admin_can_view_revenue_analytics(): void
+    {
+        $this->seed(\Database\Seeders\SubscriptionPlanSeeder::class);
+
+        $tenant = Tenant::factory()->create();
+        $plan = SubscriptionPlan::first();
+
+        TenantSubscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'billing_cycle' => 'monthly',
+            'price' => 99,
+            'starts_at' => now()->startOfMonth()->addDay(),
+        ]);
+
+        // Create a paid invoice directly (no factory exists for PlatformInvoice).
+        PlatformInvoice::create([
+            'tenant_id' => $tenant->id,
+            'subscription_id' => null,
+            'invoice_number' => 'PB-INV-'.now()->year.'-000001',
+            'amount' => 99,
+            'tax_amount' => 0,
+            'total' => 99,
+            'status' => 'paid',
+            'billing_period' => now()->format('Y-m'),
+            'issue_date' => now(),
+            'due_date' => now()->addDays(14),
+            'paid_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/analytics');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'mrr' => ['mrr', 'arr', 'new_this_month', 'churned_this_month', 'active_count', 'trial_count'],
+                    'monthly_trend' => [],
+                    'by_plan' => [],
+                    'by_method',
+                    'invoice_status' => ['draft', 'sent', 'paid', 'overdue', 'void'],
+                ],
+            ])
+            ->assertJsonPath('data.mrr.mrr', 99)
+            ->assertJsonPath('data.mrr.new_this_month', 99)
+            ->assertJsonCount(12, 'data.monthly_trend');
+    }
+
+    // ─── Phase 5: Plans CRUD ────────────────────────────────────────────────
+
+    public function test_platform_admin_can_create_plan(): void
+    {
+        $response = $this->actingAs($this->platformAdmin)
+            ->postJson('/api/platform/plans', [
+                'slug' => 'business',
+                'name' => 'Business',
+                'billing_cycle' => 'monthly',
+                'price' => 199,
+                'annual_price' => 1990,
+                'max_clients' => 5000,
+                'max_users' => 25,
+                'max_routers' => 20,
+                'features' => ['api_access', 'priority_support'],
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.slug', 'business')
+            ->assertJsonPath('data.name', 'Business');
+
+        $this->assertDatabaseHas('subscription_plans', ['slug' => 'business']);
+    }
+
+    public function test_platform_admin_can_update_plan(): void
+    {
+        $this->seed(\Database\Seeders\SubscriptionPlanSeeder::class);
+        $plan = SubscriptionPlan::where('slug', 'starter')->first();
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->putJson("/api/platform/plans/{$plan->id}", [
+                'slug' => 'starter',
+                'name' => 'Starter Plus',
+                'billing_cycle' => 'monthly',
+                'price' => 29,
+                'annual_price' => 290,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.name', 'Starter Plus');
+
+        $this->assertDatabaseHas('subscription_plans', ['id' => $plan->id, 'name' => 'Starter Plus']);
+    }
+
+    public function test_platform_admin_cannot_delete_plan_with_subscriptions(): void
+    {
+        $this->seed(\Database\Seeders\SubscriptionPlanSeeder::class);
+        $plan = SubscriptionPlan::where('slug', 'professional')->first();
+        $tenant = Tenant::factory()->create();
+
+        TenantSubscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->deleteJson("/api/platform/plans/{$plan->id}");
+
+        $response->assertStatus(409);
+        $this->assertDatabaseHas('subscription_plans', ['id' => $plan->id]);
+    }
+
+    public function test_platform_admin_can_delete_unused_plan(): void
+    {
+        $plan = SubscriptionPlan::create([
+            'slug' => 'obsolete',
+            'name' => 'Obsolete',
+            'billing_cycle' => 'monthly',
+            'price' => 50,
+            'sort_order' => 99,
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->deleteJson("/api/platform/plans/{$plan->id}");
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('subscription_plans', ['id' => $plan->id]);
+    }
+
+    public function test_subscription_stats_amortize_annual_subscriptions(): void
+    {
+        $this->seed(\Database\Seeders\SubscriptionPlanSeeder::class);
+        $plan = SubscriptionPlan::first();
+        $tenant = Tenant::factory()->create();
+
+        TenantSubscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'billing_cycle' => 'monthly',
+            'price' => 99,
+        ]);
+
+        TenantSubscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'billing_cycle' => 'annual',
+            'price' => 1200,
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/subscription-stats');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.mrr', 199)
+            ->assertJsonPath('data.arr', 2388);
+    }
+
+    // ─── Phase 6: Observability / Security ──────────────────────────────────
+
+    public function test_platform_admin_can_view_security_events(): void
+    {
+        $tenant = Tenant::factory()->create();
+
+        SystemLog::create([
+            'tenant_id' => $tenant->id,
+            'action' => 'auth.login.failed',
+            'model' => 'User',
+            'model_id' => $tenant->id,
+            'old_values' => ['reason' => 'invalid_credentials'],
+            'ip_address' => '192.0.2.10',
+        ]);
+        SystemLog::create([
+            'tenant_id' => $tenant->id,
+            'action' => 'auth.login.success',
+            'model' => 'User',
+            'old_values' => [],
+            'ip_address' => '192.0.2.11',
+        ]);
+        SystemLog::create([
+            'tenant_id' => $tenant->id,
+            'action' => 'security.rate_limit_hit',
+            'model' => 'Setting',
+            'old_values' => ['key' => 'throttle'],
+            'ip_address' => '192.0.2.12',
+        ]);
+        // Non security/auth actions must NOT leak into the security feed.
+        SystemLog::create([
+            'tenant_id' => $tenant->id,
+            'action' => 'tenant.registered',
+            'old_values' => [],
+            'ip_address' => '192.0.2.13',
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/security/events');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'data' => [],
+                    'current_page',
+                    'last_page',
+                    'total',
+                ],
+            ]);
+
+        $actions = collect($response->json('data.data'))->pluck('action')->all();
+        $this->assertContains('auth.login.failed', $actions);
+        $this->assertContains('auth.login.success', $actions);
+        $this->assertContains('security.rate_limit_hit', $actions);
+        $this->assertNotContains('tenant.registered', $actions);
+    }
+
+    public function test_security_events_can_be_filtered_by_action(): void
+    {
+        SystemLog::create(['action' => 'auth.login.failed', 'old_values' => [], 'ip_address' => '192.0.2.10']);
+        SystemLog::create(['action' => 'auth.login.success', 'old_values' => [], 'ip_address' => '192.0.2.11']);
+        SystemLog::create(['action' => 'security.rate_limit_hit', 'old_values' => [], 'ip_address' => '192.0.2.12']);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/security/events?action=failed');
+
+        $response->assertStatus(200);
+        $this->assertSame(1, $response->json('data.total'));
+        $this->assertSame('auth.login.failed', $response->json('data.data.0.action'));
+    }
+
+    public function test_security_events_can_be_filtered_by_severity(): void
+    {
+        SystemLog::create(['action' => 'auth.login.failed', 'old_values' => [], 'ip_address' => '192.0.2.10']);
+        SystemLog::create(['action' => 'auth.login.success', 'old_values' => [], 'ip_address' => '192.0.2.11']);
+        SystemLog::create(['action' => 'security.rate_limit_hit', 'old_values' => [], 'ip_address' => '192.0.2.12']);
+
+        // critical → security.* + auth.login.failed (brute-force escalations)
+        $critical = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/security/events?severity=critical')
+            ->json('data.data');
+
+        $actions = collect($critical)->pluck('action')->all();
+        $this->assertContains('security.rate_limit_hit', $actions);
+        $this->assertContains('auth.login.failed', $actions);
+        $this->assertNotContains('auth.login.success', $actions);
+
+        // info → normal auth activity only
+        $info = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/security/events?severity=info')
+            ->json('data.data');
+
+        $infoActions = collect($info)->pluck('action')->all();
+        $this->assertContains('auth.login.success', $infoActions);
+        $this->assertNotContains('security.rate_limit_hit', $infoActions);
+    }
+
+    public function test_platform_admin_can_view_suspicious_activity(): void
+    {
+        // 6 failed attempts from one IP within the 7-day window ⇒ flagged.
+        foreach (range(1, 6) as $i) {
+            SystemLog::create([
+                'action' => 'auth.login.failed',
+                'old_values' => ['reason' => "attempt {$i}"],
+                'ip_address' => '198.51.100.9',
+            ]);
+        }
+
+        // A single failure from another IP must NOT be flagged.
+        SystemLog::create([
+            'action' => 'auth.login.failed',
+            'old_values' => ['reason' => 'typo'],
+            'ip_address' => '203.0.113.7',
+        ]);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/security/suspicious');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'suspicious_ips',
+                    'recent_failures',
+                    'threshold',
+                    'window_days',
+                ],
+            ]);
+
+        $flagged = collect($response->json('data.suspicious_ips'));
+        $this->assertSame(6, $flagged->firstWhere('ip', '198.51.100.9')['attempts']);
+        $this->assertNull($flagged->firstWhere('ip', '203.0.113.7'));
+    }
+
+    public function test_platform_admin_can_view_security_overview(): void
+    {
+        SystemLog::create(['action' => 'auth.login.failed', 'old_values' => [], 'ip_address' => '192.0.2.10']);
+        SystemLog::create(['action' => 'auth.login.failed', 'old_values' => [], 'ip_address' => '192.0.2.10']);
+        SystemLog::create(['action' => 'auth.login.success', 'old_values' => [], 'ip_address' => '192.0.2.11']);
+        SystemLog::create(['action' => 'security.rate_limit_hit', 'old_values' => [], 'ip_address' => '192.0.2.12']);
+
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/security/overview');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'failed_logins_today',
+                    'failed_logins_this_week',
+                    'successful_logins_today',
+                    'successful_logins_this_week',
+                    'security_events_this_week',
+                ],
+            ])
+            ->assertJsonPath('data.failed_logins_today', 2)
+            ->assertJsonPath('data.successful_logins_today', 1)
+            ->assertJsonPath('data.security_events_this_week', 1);
+    }
+
+    public function test_security_endpoints_require_platform_admin(): void
+    {
+        $regularUser = User::factory()->create([
+            'is_platform_admin' => false,
+        ]);
+
+        $this->actingAs($regularUser)
+            ->getJson('/api/platform/security/events')
+            ->assertStatus(403);
+
+        $this->actingAs($regularUser)
+            ->getJson('/api/platform/security/suspicious')
+            ->assertStatus(403);
+
+        $this->actingAs($regularUser)
+            ->getJson('/api/platform/security/overview')
+            ->assertStatus(403);
+    }
+
+    public function test_platform_infrastructure_stats_include_service_health(): void
+    {
+        $response = $this->actingAs($this->platformAdmin)
+            ->getJson('/api/platform/stats');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'infrastructure' => [
+                        'status',
+                        'avg_response_time',
+                        'response_time_unit',
+                        'services' => [],
+                        'routers' => ['total', 'online', 'offline', 'health_percentage'],
+                        'database' => ['driver', 'status'],
+                        'cache' => ['driver', 'status'],
+                        'queue' => ['default', 'status'],
+                    ],
+                ],
+            ])
+            ->assertJsonPath('data.infrastructure.database.status', 'connected')
+            ->assertJsonPath('data.infrastructure.cache.status', 'healthy')
+            ->assertJsonCount(4, 'data.infrastructure.services');
     }
 }
