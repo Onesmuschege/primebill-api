@@ -48,6 +48,8 @@ return [
         'TicketCreated',
         'SLABreached',
         'WorkOrderCompleted',
+        'ProvisioningSucceeded',
+        'ProvisioningFailed',
     ],
 
 ];

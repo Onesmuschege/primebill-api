@@ -9,6 +9,8 @@ use App\Events\InvoiceOverdue;
 use App\Events\OLTOffline;
 use App\Events\PaymentFailed;
 use App\Events\PaymentReceived;
+use App\Events\ProvisioningFailed;
+use App\Events\ProvisioningSucceeded;
 use App\Events\RouterOffline;
 use App\Events\SLABreached;
 use App\Events\SubscriptionActivated;
@@ -296,6 +298,12 @@ class Automation
             ],
             $event instanceof ClientUpdated => [
                 fn () => $svc->log('Sync updates to RADIUS', ['client_id' => $event->entityId()]),
+            ],
+            $event instanceof ProvisioningSucceeded => [
+                fn () => $svc->log('Provisioning succeeded; service entitlement active', ['account_id' => $event->entityId()]),
+            ],
+            $event instanceof ProvisioningFailed => [
+                fn () => $svc->log('Provisioning failed; service stuck — eligible for retry', ['account_id' => $event->entityId()]),
             ],
             default => [],
         };
